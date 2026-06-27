@@ -204,7 +204,7 @@ async function init() {
     if (!socData.records || socData.records.length === 0) throw new Error('Société non trouvée: ' + societeName);
     var societeId = socData.records[0].id;
 
-    var salFormula = 'FIND("' + societeId + '", ARRAYJOIN({Société}))';
+    var salFormula = '{Société} = "' + societeId + '"';
     var salUrl = 'https://api.airtable.com/v0/' + BASE_ID + '/Salari%C3%A9s?filterByFormula=' + encodeURIComponent(salFormula) + '&sort[0][field]=Nom%20Pr%C3%A9nom';
     var salRes = await fetch(salUrl, { headers: HEADERS });
     if (!salRes.ok) {
