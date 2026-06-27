@@ -249,7 +249,7 @@ async function init() {
   } catch(e) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('error-msg').style.display = 'block';
-    document.getElementById('error-msg').textContent = 'Erreur de chargement. Vérifiez votre connexion et réessayez.';
+    document.getElementById('error-msg').textContent = 'Erreur: ' + e.message;
     document.getElementById('form-content').style.display = 'block';
     document.getElementById('nom-societe').value = societeName;
     const now = new Date();
