@@ -408,15 +408,7 @@ async function submitForm() {
         salarieId = newSalData.id;
       }
 
-      // Upload des fichiers comme pièces jointes
-      var attachments = [];
-      var files = uploadedFiles[si] || [];
-      for (var f = 0; f < files.length; f++) {
-        var b64 = await fileToBase64(files[f]);
-        attachments.push({ filename: files[f].name, content: b64 });
-      }
-
-      await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Variables%20mensuelles', {
+      var varRes = await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Variables%20mensuelles', {
         method: 'POST', headers: HEADERS,
         body: JSON.stringify({ fields: {
           'Mois': mois,
@@ -429,9 +421,30 @@ async function submitForm() {
           'Prime (€)': parseFloat(vars.prime) || 0,
           'Tickets restaurant': parseInt(vars.tickets) || 0,
           'Notes de frais (€)': parseFloat(vars.frais) || 0,
-          'Commentaire': vars.commentaire || '',
-          'Justificatifs': attachments.length > 0 ? attachments : undefined
-        }})
+          'Commentaire': vars.commentaire || ''
+        }}));
+      var varData = await varRes.json();
+      var recordId = varData.id;
+      // Upload des fichiers en pièces jointes via l'API Airtable
+      var files = uploadedFiles[si] || [];
+      for (var f = 0; f < files.length; f++) {
+        var b64 = await fileToBase64(files[f]);
+        await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Variables%20mensuelles/' + recordId + '/uploadAttachment/Justificatifs', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + API_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contentType: files[f].type, filename: files[f].name, file: b64 })
+        });
+      }
+    }
+
+    // Mettre à jour le statut de la société
+    var socFormula2 = encodeURIComponent('UPPER({Nom Société})="' + societeName.toUpperCase() + '"');
+    var socRes2 = await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + socFormula2, { headers: HEADERS });
+    var socData2 = await socRes2.json();
+    if (socData2.records && socData2.records.length > 0) {
+      await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Soci%C3%A9t%C3%A9s/' + socData2.records[0].id, {
+        method: 'PATCH', headers: HEADERS,
+        body: JSON.stringify({ fields: { 'Statut': 'Complet' } })
       });
     }
 
