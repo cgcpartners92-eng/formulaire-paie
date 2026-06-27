@@ -204,15 +204,27 @@ async function init() {
     if (!socData.records || socData.records.length === 0) throw new Error('Société non trouvée: ' + societeName);
     var societeId = socData.records[0].id;
 
-    var salFormula = '{Société} = "' + societeId + '"';
-    var salUrl = 'https://api.airtable.com/v0/' + BASE_ID + '/Salari%C3%A9s?filterByFormula=' + encodeURIComponent(salFormula) + '&sort[0][field]=Nom%20Pr%C3%A9nom';
-    var salRes = await fetch(salUrl, { headers: HEADERS });
-    if (!salRes.ok) {
-      var errData2 = await salRes.json();
-      throw new Error('API salariés ' + salRes.status + ': ' + JSON.stringify(errData2));
-    }
-    var salData = await salRes.json();
-    salaries = salData.records.map(function(r) {
+    // Charger tous les salariés et filtrer par ID de société côté client
+    var allSalaries = [];
+    var offset = null;
+    do {
+      var salUrl = 'https://api.airtable.com/v0/' + BASE_ID + '/Salari%C3%A9s?sort[0][field]=Nom%20Pr%C3%A9nom' + (offset ? '&offset=' + offset : '');
+      var salRes = await fetch(salUrl, { headers: HEADERS });
+      if (!salRes.ok) {
+        var errData2 = await salRes.json();
+        throw new Error('API salariés ' + salRes.status + ': ' + JSON.stringify(errData2));
+      }
+      var salData = await salRes.json();
+      allSalaries = allSalaries.concat(salData.records);
+      offset = salData.offset || null;
+    } while (offset);
+
+    salaries = allSalaries.filter(function(r) {
+      var soc = r.fields['Société'];
+      if (!soc) return false;
+      if (Array.isArray(soc)) return soc.indexOf(societeId) > -1;
+      return soc === societeId;
+    }).map(function(r) {
       return { id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' };
     });
 
