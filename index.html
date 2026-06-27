@@ -229,7 +229,7 @@ async function init() {
 
 
     // Étape 1 : trouver l'ID de la société par son nom
-    const socRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Soci%C3%A9t%C3%A9s?filterByFormula=UPPER%28%7BNom+Soci%C3%A9t%C3%A9%7D%29%3D%22${encodeURIComponent(societeName.toUpperCase())}%22`, { headers: HEADERS });
+    const socRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Soci%C3%A9t%C3%A9s?filterByFormula=${encodeURIComponent(`UPPER({Nom Société})="${societeName.toUpperCase()}"`)}`, { headers: HEADERS });
     if (!socRes.ok) throw new Error('Erreur API sociétés');
     const socData = await socRes.json();
     if (!socData.records || socData.records.length === 0) throw new Error('Société non trouvée');
