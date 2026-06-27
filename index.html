@@ -227,13 +227,27 @@ async function init() {
     const now = new Date();
     document.getElementById('mois').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-    // Charger les salariés de cette société
-    const encoded = encodeURIComponent(`{Société} = "${societeName}"`);
-    const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Salari%C3%A9s?filterByFormula=${encoded}&sort[0][field]=Nom%20Pr%C3%A9nom`, { headers: HEADERS });
-    
-    if (!res.ok) throw new Error('Erreur API');
-    const data = await res.json();
-    salaries = data.records.map(r => ({ id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' }));
+
+    // Charger tous les salariés et filtrer par société (champ lié)
+    let allRecords = [];
+    let offset = null;
+    do {
+      const url = `https://api.airtable.com/v0/${BASE_ID}/Salari%C3%A9s?sort[0][field]=Nom%20Pr%C3%A9nom${offset ? '&offset=' + offset : ''}`;
+      const res = await fetch(url, { headers: HEADERS });
+      if (!res.ok) throw new Error('Erreur API');
+      const data = await res.json();
+      allRecords = allRecords.concat(data.records);
+      offset = data.offset || null;
+    } while (offset);
+
+    salaries = allRecords
+      .filter(r => {
+        const soc = r.fields['Société'];
+        if (!soc) return false;
+        if (Array.isArray(soc)) return soc.some(s => String(s).toUpperCase() === societeName.toUpperCase());
+        return String(soc).toUpperCase() === societeName.toUpperCase();
+      })
+      .map(r => ({ id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' }));
 
     renderSalaries();
     document.getElementById('loading').style.display = 'none';
