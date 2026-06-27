@@ -150,6 +150,16 @@
           <label>Commentaire</label>
           <textarea placeholder="Situation particulière, arrêt maladie, remarque..." class="var-input" data-key="commentaire"></textarea>
         </div>
+        <div class="form-group">
+          <label>Justificatifs (notes de frais, tableau IK...)</label>
+          <div id="upload-zone" style="border:1.5px dashed #D1D5DB;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all 0.15s;background:#FAFAFA" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563EB'" ondrop="handleDrop(event)">
+            <div style="font-size:24px;margin-bottom:6px">📎</div>
+            <div style="font-size:13px;color:#6B7A8D">Cliquez ou glissez vos fichiers ici</div>
+            <div style="font-size:11px;color:#9CA3AF;margin-top:4px">PDF, images, Excel — max 5 Mo par fichier</div>
+          </div>
+          <input type="file" id="file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" style="display:none" onchange="handleFiles(this.files)">
+          <div id="file-list" style="margin-top:8px"></div>
+        </div>
       </div>
     </div>
 
@@ -295,6 +305,7 @@ function loadTab(ti) {
   document.querySelectorAll('.var-input').forEach(function(input) {
     input.value = data[input.dataset.key] || '';
   });
+  renderFileList(si);
 }
 
 function saveCurrentTab() {
@@ -304,6 +315,52 @@ function saveCurrentTab() {
   if (!variablesData[si]) variablesData[si] = {};
   document.querySelectorAll('.var-input').forEach(function(input) {
     variablesData[si][input.dataset.key] = input.value;
+  });
+}
+
+var uploadedFiles = {};
+
+function handleDrop(e) {
+  e.preventDefault();
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  var si = selectedSalaries[currentSalarieIndex];
+  if (si === undefined) return;
+  if (!uploadedFiles[si]) uploadedFiles[si] = [];
+  for (var i = 0; i < files.length; i++) {
+    if (files[i].size > 5 * 1024 * 1024) { alert(files[i].name + ' dépasse 5 Mo.'); continue; }
+    uploadedFiles[si].push(files[i]);
+  }
+  renderFileList(si);
+}
+
+function renderFileList(si) {
+  var list = document.getElementById('file-list');
+  if (!list) return;
+  var files = uploadedFiles[si] || [];
+  list.innerHTML = files.map(function(f, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px">' +
+      '<span>📄</span><span style="flex:1">' + f.name + '</span>' +
+      '<span style="color:#9CA3AF">' + (f.size/1024).toFixed(0) + ' Ko</span>' +
+      '<button onclick="removeFile(' + i + ')" style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:16px;padding:0 4px">×</button>' +
+      '</div>';
+  }).join('');
+}
+
+function removeFile(i) {
+  var si = selectedSalaries[currentSalarieIndex];
+  if (uploadedFiles[si]) uploadedFiles[si].splice(i, 1);
+  renderFileList(si);
+}
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) { resolve(e.target.result.split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 
@@ -351,6 +408,14 @@ async function submitForm() {
         salarieId = newSalData.id;
       }
 
+      // Upload des fichiers comme pièces jointes
+      var attachments = [];
+      var files = uploadedFiles[si] || [];
+      for (var f = 0; f < files.length; f++) {
+        var b64 = await fileToBase64(files[f]);
+        attachments.push({ filename: files[f].name, content: b64 });
+      }
+
       await fetch('https://api.airtable.com/v0/' + BASE_ID + '/Variables%20mensuelles', {
         method: 'POST', headers: HEADERS,
         body: JSON.stringify({ fields: {
@@ -364,7 +429,8 @@ async function submitForm() {
           'Prime (€)': parseFloat(vars.prime) || 0,
           'Tickets restaurant': parseInt(vars.tickets) || 0,
           'Notes de frais (€)': parseFloat(vars.frais) || 0,
-          'Commentaire': vars.commentaire || ''
+          'Commentaire': vars.commentaire || '',
+          'Justificatifs': attachments.length > 0 ? attachments : undefined
         }})
       });
     }
