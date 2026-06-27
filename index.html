@@ -228,7 +228,7 @@ async function init() {
     document.getElementById('mois').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
     // Charger les salariés de cette société
-    const encoded = encodeURIComponent(`{Nom Société} = "${societeName}"`);
+    const encoded = encodeURIComponent(`{Société} = "${societeName}"`);
     const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Salari%C3%A9s?filterByFormula=${encoded}&sort[0][field]=Nom%20Pr%C3%A9nom`, { headers: HEADERS });
     
     if (!res.ok) throw new Error('Erreur API');
