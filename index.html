@@ -204,7 +204,7 @@
 </div>
 
 <script>
-const API_TOKEN = 'patoB1OOPkaSYoiYk.b6d3c05236305b0d8d9501d15767a19fd3d89a7ae800';
+const API_TOKEN = 'patoB100PkaSYoiYk.697914dce6c82d5acd8536762d80f0629ee4cc34886ce106c0483bf5be0a54a9';
 const BASE_ID = 'appaXD2psEtqq4OeD';
 const HEADERS = { 'Authorization': `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' };
 
@@ -228,26 +228,19 @@ async function init() {
     document.getElementById('mois').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
 
-    // Charger tous les salariés et filtrer par société (champ lié)
-    let allRecords = [];
-    let offset = null;
-    do {
-      const url = `https://api.airtable.com/v0/${BASE_ID}/Salari%C3%A9s?sort[0][field]=Nom%20Pr%C3%A9nom${offset ? '&offset=' + offset : ''}`;
-      const res = await fetch(url, { headers: HEADERS });
-      if (!res.ok) throw new Error('Erreur API');
-      const data = await res.json();
-      allRecords = allRecords.concat(data.records);
-      offset = data.offset || null;
-    } while (offset);
+    // Étape 1 : trouver l'ID de la société par son nom
+    const socRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Soci%C3%A9t%C3%A9s?filterByFormula=UPPER%28%7BNom+Soci%C3%A9t%C3%A9%7D%29%3D%22${encodeURIComponent(societeName.toUpperCase())}%22`, { headers: HEADERS });
+    if (!socRes.ok) throw new Error('Erreur API sociétés');
+    const socData = await socRes.json();
+    if (!socData.records || socData.records.length === 0) throw new Error('Société non trouvée');
+    const societeId = socData.records[0].id;
 
-    salaries = allRecords
-      .filter(r => {
-        const soc = r.fields['Société'];
-        if (!soc) return false;
-        if (Array.isArray(soc)) return soc.some(s => String(s).toUpperCase() === societeName.toUpperCase());
-        return String(soc).toUpperCase() === societeName.toUpperCase();
-      })
-      .map(r => ({ id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' }));
+    // Étape 2 : charger les salariés liés à cet ID
+    const encoded = encodeURIComponent(`FIND("${societeId}", ARRAYJOIN({Société}))`);
+    const salRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Salari%C3%A9s?filterByFormula=${encoded}&sort[0][field]=Nom%20Pr%C3%A9nom`, { headers: HEADERS });
+    if (!salRes.ok) throw new Error('Erreur API salariés');
+    const salData = await salRes.json();
+    salaries = salData.records.map(r => ({ id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' }));
 
     renderSalaries();
     document.getElementById('loading').style.display = 'none';
