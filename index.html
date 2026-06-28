@@ -353,13 +353,25 @@ async function submitForm() {
         }})
       });
     }
+    // Calculer le statut selon le nombre de salariés soumis ce mois
     var f2 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
     var r3 = await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + encodeURIComponent(f2), { headers: H });
     var d3 = await r3.json();
     if (d3.records && d3.records.length) {
-      await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s/' + d3.records[0].id, {
+      var socRecord = d3.records[0];
+      var totalSalaries = (socRecord.fields['Salariés'] || []).length;
+
+      // Compter les salariés déjà soumis ce mois
+      var moisVal = document.getElementById('mois').value;
+      var fVar = 'AND({Nom société}="' + societe + '",{Mois}="' + moisVal + '")';
+      var rVar = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(fVar), { headers: H });
+      var dVar = await rVar.json();
+      var soumis = dVar.records ? dVar.records.length : 0;
+
+      var newStatut = soumis >= totalSalaries ? 'Complet' : 'En cours';
+      await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s/' + socRecord.id, {
         method: 'PATCH', headers: H,
-        body: JSON.stringify({ fields: { 'Statut': 'Complet' } })
+        body: JSON.stringify({ fields: { 'Statut': newStatut } })
       });
     }
     document.getElementById('form-content').style.display = 'none';
