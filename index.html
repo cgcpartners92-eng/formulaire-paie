@@ -179,6 +179,7 @@ var selected = [];
 var varsData = {};
 var curTab = 0;
 var uploadedFiles = {};
+var socId = null;
 
 async function init() {
   document.getElementById('header-sub').textContent = societe || 'Formulaire de saisie';
@@ -191,7 +192,7 @@ async function init() {
     if (!r1.ok) throw new Error('Erreur API ' + r1.status);
     var d1 = await r1.json();
     if (!d1.records.length) throw new Error('Société introuvable');
-    var socId = d1.records[0].id;
+    socId = d1.records[0].id;
     var all = [];
     var offset = null;
     do {
