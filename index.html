@@ -340,6 +340,7 @@ async function submitForm() {
         method: 'POST', headers: H,
         body: JSON.stringify({ fields: {
           'Mois': mois,
+          'Société': [socId],
           'Nom société': societe,
           'Nom du salarié': s.nom,
           'Heures travaillées': parseFloat(v.heures) || 0,
