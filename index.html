@@ -178,7 +178,50 @@ var salaries = [];
 var selected = [];
 var varsData = {};
 var curTab = 0;
-var uploadedFiles = {};
+var uploadedFiles = {}; // { salarieIndex: [{name, url}] }
+var IMGBB_KEY = 'f395187f118f852ee58addd9a5f0f054';
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result.split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFiles(files) {
+  var list = document.getElementById('file-list');
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (file.size > 10 * 1024 * 1024) { alert('Fichier trop volumineux : ' + file.name + ' (max 10 Mo)'); continue; }
+    var itemId = 'fitem_' + Date.now() + '_' + i;
+    var div = document.createElement('div');
+    div.id = itemId;
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8FAFF;border:1px solid #DBEAFE;border-radius:6px;margin-top:6px;font-size:12px;';
+    div.innerHTML = '<span>📎</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + file.name + '</span><span id="st_' + itemId + '" style="color:#F59E0B;">⏳ Upload…</span>';
+    list.appendChild(div);
+    try {
+      var b64 = await fileToBase64(file);
+      var fd = new FormData();
+      fd.append('key', IMGBB_KEY);
+      fd.append('image', b64);
+      fd.append('name', file.name);
+      var res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: fd });
+      var data = await res.json();
+      if (!data.success) throw new Error(data.error ? data.error.message : 'Échec upload');
+      var url = data.data.url;
+      if (!uploadedFiles[curTab]) uploadedFiles[curTab] = [];
+      uploadedFiles[curTab].push({ name: file.name, url: url });
+      document.getElementById('st_' + itemId).textContent = '✅ Prêt';
+      document.getElementById('st_' + itemId).style.color = '#16A34A';
+    } catch(err) {
+      document.getElementById('st_' + itemId).textContent = '❌ Erreur';
+      document.getElementById('st_' + itemId).style.color = '#DC2626';
+    }
+  }
+  document.getElementById('file-input').value = '';
+}
 var socId = null;
 
 async function init() {
@@ -351,7 +394,8 @@ async function submitForm() {
           'Prime (€)': parseFloat(v.prime) || 0,
           'Tickets restaurant': parseInt(v.tickets) || 0,
           'Notes de frais (€)': parseFloat(v.frais) || 0,
-          'Commentaire': v.commentaire || ''
+          'Commentaire': v.commentaire || '',
+          'Pièces jointes': (uploadedFiles[i] || []).map(function(f){ return { url: f.url, filename: f.name }; })
         }})
       });
     }
