@@ -380,7 +380,7 @@ async function submitForm() {
           'Tickets restaurant': parseInt(v.tickets) || 0,
           'Notes de frais (€)': parseFloat(v.frais) || 0,
           'Commentaire': v.commentaire || '',
-          'Pièces jointes': (uploadedFiles[si] || []).map(function(f){ return { url: f.url, filename: f.name }; })
+          'Pièce jointe': (uploadedFiles[si] || []).map(function(f){ return { url: f.url, filename: f.name }; })
         }})
       });
     }
