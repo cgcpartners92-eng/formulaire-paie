@@ -1,6 +1,7 @@
-export const config = { api: { bodyParser: false } };
+const https = require('https');
+const http = require('http');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,18 +13,33 @@ export default async function handler(req, res) {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = Buffer.concat(chunks);
+    const contentType = req.headers['content-type'] || '';
 
-    const response = await fetch('https://catbox.moe/user/api.php', {
-      method: 'POST',
-      body: body,
-      headers: { 'content-type': req.headers['content-type'] }
+    const result = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'catbox.moe',
+        path: '/user/api.php',
+        method: 'POST',
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': body.length
+        }
+      };
+      const proxyReq = https.request(options, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', chunk => data += chunk);
+        proxyRes.on('end', () => resolve(data.trim()));
+      });
+      proxyReq.on('error', reject);
+      proxyReq.write(body);
+      proxyReq.end();
     });
 
-    const text = await response.text();
-    if (!text.startsWith('http')) throw new Error('Upload failed: ' + text);
-
-    res.status(200).send(text);
+    if (!result.startsWith('http')) throw new Error('Upload failed: ' + result);
+    res.status(200).send(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-}
+};
+
+module.exports.config = { api: { bodyParser: false } };
