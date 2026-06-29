@@ -357,13 +357,14 @@ async function handleFiles(files) {
         if (!data.success) throw new Error('Échec imgbb');
         url = data.data.url;
       } else {
-        // catbox.moe pour PDF, Excel, Word, etc.
+        // /api/upload (proxy Vercel) pour PDF, Excel, Word, etc.
         var fd2 = new FormData();
         fd2.append('reqtype', 'fileupload');
         fd2.append('fileToUpload', file);
-        var res2 = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd2 });
+        var res2 = await fetch('/api/upload', { method: 'POST', body: fd2 });
+        if (!res2.ok) throw new Error('Erreur proxy upload');
         url = (await res2.text()).trim();
-        if (!url.startsWith('http')) throw new Error('Échec catbox');
+        if (!url.startsWith('http')) throw new Error('URL invalide');
       }
       uploadedFiles[si].push({ name: file.name, url: url });
       document.getElementById('st_' + itemId).textContent = '✅ Prêt';
