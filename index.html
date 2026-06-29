@@ -273,7 +273,16 @@ function loadTab(ti) {
   document.getElementById('current-salarie-name').textContent = salaries[si].nom;
   var d = varsData[si] || {};
   document.querySelectorAll('.var-input').forEach(function(inp) { inp.value = d[inp.dataset.key] || ''; });
-  renderFileList(si);
+  // Afficher les fichiers déjà uploadés pour ce salarié
+  var list = document.getElementById('file-list');
+  list.innerHTML = '';
+  var files = uploadedFiles[si] || [];
+  files.forEach(function(f) {
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px;';
+    div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + f.name + '</span><span style="color:#16A34A;white-space:nowrap">✅ Prêt</span>';
+    list.appendChild(div);
+  });
 }
 
 function saveTab() {
