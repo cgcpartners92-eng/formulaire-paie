@@ -334,7 +334,7 @@ async function handleFiles(files) {
   var list = document.getElementById('file-list');
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
-    if (file.size > 10 * 1024 * 1024) { alert('Fichier trop volumineux : ' + file.name + ' (max 10 Mo)'); continue; }
+    if (file.size > 20 * 1024 * 1024) { alert('Fichier trop volumineux : ' + file.name + ' (max 20 Mo)'); continue; }
     var itemId = 'fitem_' + Date.now() + '_' + i;
     var div = document.createElement('div');
     div.id = itemId;
@@ -342,20 +342,36 @@ async function handleFiles(files) {
     div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + file.name + '</span><span id="st_' + itemId + '" style="color:#F59E0B;white-space:nowrap">⏳ Upload…</span>';
     list.appendChild(div);
     try {
-      var b64 = await fileToBase64(file);
-      var fd = new FormData();
-      fd.append('key', IMGBB_KEY);
-      fd.append('image', b64);
-      fd.append('name', file.name);
-      var res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: fd });
-      var data = await res.json();
-      if (!data.success) throw new Error(data.error ? data.error.message : 'Échec upload');
-      uploadedFiles[si].push({ name: file.name, url: data.data.url });
+      var url = '';
+      var ext = file.name.split('.').pop().toLowerCase();
+      var isImage = ['jpg','jpeg','png','gif','webp','bmp'].indexOf(ext) !== -1;
+      if (isImage) {
+        // imgbb pour les images
+        var b64 = await fileToBase64(file);
+        var fd = new FormData();
+        fd.append('key', IMGBB_KEY);
+        fd.append('image', b64);
+        fd.append('name', file.name);
+        var res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: fd });
+        var data = await res.json();
+        if (!data.success) throw new Error('Échec imgbb');
+        url = data.data.url;
+      } else {
+        // catbox.moe pour PDF, Excel, Word, etc.
+        var fd2 = new FormData();
+        fd2.append('reqtype', 'fileupload');
+        fd2.append('fileToUpload', file);
+        var res2 = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd2 });
+        url = (await res2.text()).trim();
+        if (!url.startsWith('http')) throw new Error('Échec catbox');
+      }
+      uploadedFiles[si].push({ name: file.name, url: url });
       document.getElementById('st_' + itemId).textContent = '✅ Prêt';
       document.getElementById('st_' + itemId).style.color = '#16A34A';
     } catch(err) {
       document.getElementById('st_' + itemId).textContent = '❌ Erreur upload';
       document.getElementById('st_' + itemId).style.color = '#DC2626';
+      console.error(err);
     }
   }
   document.getElementById('file-input').value = '';
