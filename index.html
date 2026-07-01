@@ -75,7 +75,29 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       </div>
       <div class="form-group">
         <label>Mois concerné <span class="required">*</span></label>
-        <input type="month" id="mois" required>
+        <div style="display:flex;gap:8px">
+          <select id="mois-month" required style="flex:1;padding:10px 12px;border:1.5px solid #CBD5E0;border-radius:8px;font-size:14px;background:#fff;color:#2D3748;">
+            <option value="01">Janvier</option>
+            <option value="02">Février</option>
+            <option value="03">Mars</option>
+            <option value="04">Avril</option>
+            <option value="05">Mai</option>
+            <option value="06">Juin</option>
+            <option value="07">Juillet</option>
+            <option value="08">Août</option>
+            <option value="09">Septembre</option>
+            <option value="10">Octobre</option>
+            <option value="11">Novembre</option>
+            <option value="12">Décembre</option>
+          </select>
+          <select id="mois-year" required style="flex:1;padding:10px 12px;border:1.5px solid #CBD5E0;border-radius:8px;font-size:14px;background:#fff;color:#2D3748;">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+            <option value="2028">2028</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -108,7 +130,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       <div class="grid-2">
         <div class="form-group">
           <label>Heures travaillées</label>
-          <input type="number" step="0.01" placeholder="151.67" class="var-input" data-key="heures">
+          <input type="number" step="0.01" placeholder="" class="var-input" data-key="heures">
         </div>
         <div class="form-group">
           <label>Heures supplémentaires</label>
@@ -150,19 +172,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
         <div id="file-list" style="margin-top:8px"></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title">Validation</div>
-      <div class="grid-2">
-        <div class="form-group">
-          <label>Nom du responsable <span class="required">*</span></label>
-          <input type="text" id="responsable" placeholder="Nom Prénom" required>
-        </div>
-        <div class="form-group">
-          <label>Email de confirmation</label>
-          <input type="email" id="email-confirm" placeholder="contact@societe.fr">
-        </div>
-      </div>
-    </div>
+
     <button class="submit-btn" onclick="submitForm()" id="submit-btn">
       <span>📤</span> Soumettre les variables de paie
     </button>
@@ -198,7 +208,8 @@ async function init() {
   document.getElementById('header-sub').textContent = societe || 'Formulaire de saisie';
   document.getElementById('nom-societe').value = societe;
   var now = new Date();
-  document.getElementById('mois').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('mois-month').value = String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('mois-year').value = String(now.getFullYear());
   try {
     var f1 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
     var r1 = await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + encodeURIComponent(f1), { headers: H });
@@ -343,10 +354,10 @@ async function handleFiles(files) {
 
 async function submitForm() {
   saveTab();
-  var mois = document.getElementById('mois').value;
-  var resp = document.getElementById('responsable').value.trim();
-  if (!mois) { alert('Veuillez sélectionner le mois.'); return; }
-  if (!resp) { alert('Veuillez saisir le nom du responsable.'); return; }
+  var moisM = document.getElementById('mois-month').value;
+  var moisY = document.getElementById('mois-year').value;
+  var mois = moisY + '-' + moisM;
+  if (!moisM || !moisY) { alert('Veuillez sélectionner le mois.'); return; }
   if (!selected.length) { alert('Veuillez sélectionner au moins un salarié.'); return; }
   var btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -393,7 +404,7 @@ async function submitForm() {
       var totalSalaries = (socRecord.fields['Salariés'] || []).length;
 
       // Compter les salariés déjà soumis ce mois
-      var moisVal = document.getElementById('mois').value;
+      var moisVal = document.getElementById('mois-year').value + '-' + document.getElementById('mois-month').value;
       var fVar = 'AND({Nom société}="' + societe + '",{Mois}="' + moisVal + '")';
       var rVar = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(fVar), { headers: H });
       var dVar = await rVar.json();
