@@ -16,6 +16,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .form-group { margin-bottom: 18px; }
 label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
 .required { color: #EF4444; margin-left: 3px; }
+.field-hint { font-size: 12px; color: #6B7A8D; margin: -2px 0 6px; line-height: 1.35; }
 input, select, textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #D1D5DB; border-radius: 8px; font-size: 14px; color: #111827; background: #fff; transition: border-color 0.15s; appearance: none; -webkit-appearance: none; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
@@ -75,29 +76,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       </div>
       <div class="form-group">
         <label>Mois concerné <span class="required">*</span></label>
-        <div style="display:flex;gap:8px">
-          <select id="mois-month" required style="flex:1;padding:10px 12px;border:1.5px solid #CBD5E0;border-radius:8px;font-size:14px;background:#fff;color:#2D3748;">
-            <option value="01">Janvier</option>
-            <option value="02">Février</option>
-            <option value="03">Mars</option>
-            <option value="04">Avril</option>
-            <option value="05">Mai</option>
-            <option value="06">Juin</option>
-            <option value="07">Juillet</option>
-            <option value="08">Août</option>
-            <option value="09">Septembre</option>
-            <option value="10">Octobre</option>
-            <option value="11">Novembre</option>
-            <option value="12">Décembre</option>
-          </select>
-          <select id="mois-year" required style="flex:1;padding:10px 12px;border:1.5px solid #CBD5E0;border-radius:8px;font-size:14px;background:#fff;color:#2D3748;">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026">2026</option>
-            <option value="2027">2027</option>
-            <option value="2028">2028</option>
-          </select>
-        </div>
+        <input type="month" id="mois" required>
       </div>
     </div>
     <div class="card">
@@ -130,7 +109,8 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       <div class="grid-2">
         <div class="form-group">
           <label>Heures travaillées</label>
-          <input type="number" step="0.01" placeholder="" class="var-input" data-key="heures">
+          <p class="field-hint">Mettre les heures selon contrat de travail</p>
+          <input type="number" step="0.01" placeholder="151.67" class="var-input" data-key="heures">
         </div>
         <div class="form-group">
           <label>Heures supplémentaires</label>
@@ -138,10 +118,12 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
         </div>
         <div class="form-group">
           <label>Absences (jours)</label>
+          <p class="field-hint">Maladie ou non justifié à préciser dans les commentaires</p>
           <input type="number" step="0.5" placeholder="0" class="var-input" data-key="absences">
         </div>
         <div class="form-group">
           <label>Congés (jours)</label>
+          <p class="field-hint">Congés payés ou sans solde à préciser dans les commentaires</p>
           <input type="number" step="0.5" placeholder="0" class="var-input" data-key="conges">
         </div>
         <div class="form-group">
@@ -150,15 +132,23 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
         </div>
         <div class="form-group">
           <label>Tickets restaurant</label>
+          <p class="field-hint">Nombre de repas chantier</p>
           <input type="number" placeholder="0" class="var-input" data-key="tickets">
         </div>
         <div class="form-group">
+          <label>Mutuelle (€)</label>
+          <p class="field-hint">Montant ou cotisation mutuelle</p>
+          <input type="number" step="0.01" placeholder="0" class="var-input" data-key="mutuelle">
+        </div>
+        <div class="form-group">
           <label>Notes de frais (€)</label>
+          <p class="field-hint">Fournir les justificatifs</p>
           <input type="number" step="0.01" placeholder="0" class="var-input" data-key="frais">
         </div>
       </div>
       <div class="form-group">
         <label>Commentaire</label>
+        <p class="field-hint">Ajouter l'avis d'arrêt de travail / tableau ind. km. / justificatif des frais</p>
         <textarea placeholder="Situation particulière, arrêt maladie, remarque..." class="var-input" data-key="commentaire"></textarea>
       </div>
       <div class="form-group">
@@ -172,7 +162,6 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
         <div id="file-list" style="margin-top:8px"></div>
       </div>
     </div>
-
     <button class="submit-btn" onclick="submitForm()" id="submit-btn">
       <span>📤</span> Soumettre les variables de paie
     </button>
@@ -188,28 +177,14 @@ var salaries = [];
 var selected = [];
 var varsData = {};
 var curTab = 0;
-var uploadedFiles = {}; // { salarieIndex: [{name, url}] }
-var CLOUDINARY_CLOUD = 'dxw85arqq';
-var CLOUDINARY_PRESET = 'cgc-paie';
-
-function fileToBase64(file) {
-  return new Promise(function(resolve, reject) {
-    var reader = new FileReader();
-    reader.onload = function() { resolve(reader.result.split(',')[1]); };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// handleFiles défini plus bas
+var uploadedFiles = {};
 var socId = null;
 
 async function init() {
   document.getElementById('header-sub').textContent = societe || 'Formulaire de saisie';
   document.getElementById('nom-societe').value = societe;
   var now = new Date();
-  document.getElementById('mois-month').value = String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('mois-year').value = String(now.getFullYear());
+  document.getElementById('mois').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   try {
     var f1 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
     var r1 = await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + encodeURIComponent(f1), { headers: H });
@@ -272,7 +247,7 @@ function renderTabs() {
   var tabs = document.getElementById('salaries-tabs');
   tabs.innerHTML = selected.map(function(si, ti) {
     var a = ti === curTab;
-    var parts = salaries[si].nom.split(' '); var label = parts.length > 1 ? parts[0] + ' ' + parts[1] : parts[0]; return '<button onclick="switchTab(' + ti + ')" style="padding:6px 14px;border-radius:20px;border:1.5px solid ' + (a?'#2563EB':'#D1D5DB') + ';background:' + (a?'#EFF6FF':'#fff') + ';color:' + (a?'#2563EB':'#374151') + ';font-size:13px;cursor:pointer;font-weight:' + (a?600:400) + '">' + label + '</button>';
+    return '<button onclick="switchTab(' + ti + ')" style="padding:6px 14px;border-radius:20px;border:1.5px solid ' + (a?'#2563EB':'#D1D5DB') + ';background:' + (a?'#EFF6FF':'#fff') + ';color:' + (a?'#2563EB':'#374151') + ';font-size:13px;cursor:pointer;font-weight:' + (a?600:400) + '">' + salaries[si].nom.split(' ')[0] + '</button>';
   }).join('');
   loadTab(curTab);
 }
@@ -284,16 +259,7 @@ function loadTab(ti) {
   document.getElementById('current-salarie-name').textContent = salaries[si].nom;
   var d = varsData[si] || {};
   document.querySelectorAll('.var-input').forEach(function(inp) { inp.value = d[inp.dataset.key] || ''; });
-  // Afficher les fichiers déjà uploadés pour ce salarié
-  var list = document.getElementById('file-list');
-  list.innerHTML = '';
-  var files = uploadedFiles[si] || [];
-  files.forEach(function(f) {
-    var div = document.createElement('div');
-    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px;';
-    div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + f.name + '</span><span style="color:#16A34A;white-space:nowrap">✅ Prêt</span>';
-    list.appendChild(div);
-  });
+  renderFileList(si);
 }
 
 function saveTab() {
@@ -317,47 +283,39 @@ function addNewSalarie() {
   renderSalaries();
 }
 
-async function handleFiles(files) {
+function handleFiles(files) {
   var si = selected[curTab];
   if (si === undefined) return;
   if (!uploadedFiles[si]) uploadedFiles[si] = [];
-  var list = document.getElementById('file-list');
   for (var i = 0; i < files.length; i++) {
-    var file = files[i];
-    if (file.size > 20 * 1024 * 1024) { alert('Fichier trop volumineux : ' + file.name + ' (max 20 Mo)'); continue; }
-    var itemId = 'fitem_' + Date.now() + '_' + i;
-    var div = document.createElement('div');
-    div.id = itemId;
-    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px;';
-    div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + file.name + '</span><span id="st_' + itemId + '" style="color:#F59E0B;white-space:nowrap">⏳ Upload…</span>';
-    list.appendChild(div);
-    try {
-      var fd = new FormData();
-      fd.append('file', file);
-      fd.append('upload_preset', CLOUDINARY_PRESET);
-      var res = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/auto/upload', {
-        method: 'POST', body: fd
-      });
-      var data = await res.json();
-      if (!data.secure_url) throw new Error(data.error ? data.error.message : 'Échec upload');
-      uploadedFiles[si].push({ name: file.name, url: data.secure_url });
-      document.getElementById('st_' + itemId).textContent = '✅ Prêt';
-      document.getElementById('st_' + itemId).style.color = '#16A34A';
-    } catch(err) {
-      document.getElementById('st_' + itemId).textContent = '❌ Erreur upload';
-      document.getElementById('st_' + itemId).style.color = '#DC2626';
-      console.error(err);
-    }
+    if (files[i].size > 5242880) { alert(files[i].name + ' dépasse 5 Mo.'); continue; }
+    uploadedFiles[si].push(files[i]);
   }
-  document.getElementById('file-input').value = '';
+  renderFileList(si);
+}
+
+function renderFileList(si) {
+  var el = document.getElementById('file-list');
+  if (!el) return;
+  var files = uploadedFiles[si] || [];
+  el.innerHTML = files.map(function(f, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px">' +
+      '<span>📄</span><span style="flex:1">' + f.name + '</span>' +
+      '<span style="color:#9CA3AF">' + Math.round(f.size/1024) + ' Ko</span>' +
+      '<button onclick="removeFile(' + i + ')" style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:16px;padding:0 4px">×</button></div>';
+  }).join('');
+}
+
+function removeFile(i) {
+  var si = selected[curTab];
+  if (uploadedFiles[si]) uploadedFiles[si].splice(i, 1);
+  renderFileList(si);
 }
 
 async function submitForm() {
   saveTab();
-  var moisM = document.getElementById('mois-month').value;
-  var moisY = document.getElementById('mois-year').value;
-  var mois = moisY + '-' + moisM;
-  if (!moisM || !moisY) { alert('Veuillez sélectionner le mois.'); return; }
+  var mois = document.getElementById('mois').value;
+  if (!mois) { alert('Veuillez sélectionner le mois.'); return; }
   if (!selected.length) { alert('Veuillez sélectionner au moins un salarié.'); return; }
   var btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -389,9 +347,9 @@ async function submitForm() {
           'Congés (jours)': parseFloat(v.conges) || 0,
           'Prime (€)': parseFloat(v.prime) || 0,
           'Tickets restaurant': parseInt(v.tickets) || 0,
+          'Mutuelle (€)': parseFloat(v.mutuelle) || 0,
           'Notes de frais (€)': parseFloat(v.frais) || 0,
-          'Commentaire': v.commentaire || '',
-          'Pièce jointe': (uploadedFiles[si] || []).map(function(f){ return { url: f.url, filename: f.name }; })
+          'Commentaire': v.commentaire || ''
         }})
       });
     }
@@ -404,7 +362,7 @@ async function submitForm() {
       var totalSalaries = (socRecord.fields['Salariés'] || []).length;
 
       // Compter les salariés déjà soumis ce mois
-      var moisVal = document.getElementById('mois-year').value + '-' + document.getElementById('mois-month').value;
+      var moisVal = document.getElementById('mois').value;
       var fVar = 'AND({Nom société}="' + societe + '",{Mois}="' + moisVal + '")';
       var rVar = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(fVar), { headers: H });
       var dVar = await rVar.json();
