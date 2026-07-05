@@ -225,7 +225,11 @@ async function init() {
       offset = d2.offset || null;
     } while (offset);
     salaries = all.filter(function(r) {
-      return matchSoc(r.fields['Société']);
+      if (!matchSoc(r.fields['Société'])) return false;
+      var sortieVal = null;
+      for (var k in r.fields) { if (norm(k) === 'SORTIE') { sortieVal = r.fields[k]; break; } }
+      if (sortieVal && ('' + sortieVal).trim() !== '') return false; // salarié parti = masqué
+      return true;
     }).map(function(r) {
       return { id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' };
     });
