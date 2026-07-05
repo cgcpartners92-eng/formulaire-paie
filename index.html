@@ -170,6 +170,9 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
 <script>
 var TOKEN = 'patoB1OOPkaSYoiYk.766fca6f78313ffb2e4ca5aa9b487b67e94d437d553ab8021171381a117f7af4';
 var BASE = 'appaXD2psEtqq4OeD';
+var CLOUD = 'dxw85arqq';
+var PRESET = 'cgc-paie';
+var ATTACH_FIELD = 'Pièce jointe';
 var H = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
 var params = new URLSearchParams(window.location.search);
 var societe = params.get('societe') || '';
@@ -340,7 +343,7 @@ async function submitForm() {
         var nd = await nr.json();
         sId = nd.id;
       }
-      await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles', {
+      var vr = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles', {
         method: 'POST', headers: H,
         body: JSON.stringify({ fields: {
           'Mois': mois,
@@ -358,6 +361,45 @@ async function submitForm() {
           'Commentaire': v.commentaire || ''
         }})
       });
+      if (!vr.ok) {
+        var ve = await vr.json();
+        var msg = (ve.error && (ve.error.message || ve.error.type)) || ('HTTP ' + vr.status);
+        throw new Error('Données non enregistrées (' + s.nom + ') : ' + msg);
+      }
+      var vd = await vr.json();
+      var recId = vd.id;
+
+      // Téléverser les justificatifs sur Cloudinary puis les attacher à la ligne
+      var files = uploadedFiles[si] || [];
+      if (recId && files.length) {
+        btn.textContent = 'Envoi des fichiers...';
+        var attachments = [];
+        for (var f = 0; f < files.length; f++) {
+          try {
+            var fd = new FormData();
+            fd.append('file', files[f]);
+            fd.append('upload_preset', PRESET);
+            var cr = await fetch('https://api.cloudinary.com/v1_1/' + CLOUD + '/auto/upload', { method: 'POST', body: fd });
+            var cd = await cr.json();
+            if (cd.secure_url) {
+              attachments.push({ url: cd.secure_url, filename: files[f].name });
+            }
+          } catch (uErr) { /* on continue avec les autres fichiers */ }
+        }
+        if (attachments.length) {
+          var fields = {};
+          fields[ATTACH_FIELD] = attachments;
+          var pr = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles/' + recId, {
+            method: 'PATCH', headers: H,
+            body: JSON.stringify({ fields: fields })
+          });
+          if (!pr.ok) {
+            var pe = await pr.json();
+            var pmsg = (pe.error && (pe.error.message || pe.error.type)) || ('HTTP ' + pr.status);
+            throw new Error('Données enregistrées, mais fichiers non attachés (' + s.nom + ') : ' + pmsg);
+          }
+        }
+      }
     }
     // Calculer le statut selon le nombre de salariés soumis ce mois
     var f2 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
