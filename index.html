@@ -189,12 +189,27 @@ async function init() {
   var now = new Date();
   document.getElementById('mois').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   try {
-    var f1 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
+    var f1 = 'UPPER(TRIM({Nom Société}))="' + societe.toUpperCase() + '"';
     var r1 = await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + encodeURIComponent(f1), { headers: H });
     if (!r1.ok) throw new Error('Erreur API ' + r1.status);
     var d1 = await r1.json();
     if (!d1.records.length) throw new Error('Société introuvable');
+    // Toutes les fiches société correspondant au nom (gère doublons) + noms normalisés
+    var socIds = d1.records.map(function(r){ return r.id; });
+    var socNames = d1.records.map(function(r){ return (r.fields['Nom Société'] || '').trim().toUpperCase(); });
+    socNames.push(societe.trim().toUpperCase());
     socId = d1.records[0].id;
+    function norm(x){ return ('' + x).trim().toUpperCase(); }
+    function matchSoc(val){
+      if (!val) return false;
+      var arr = Array.isArray(val) ? val : [val];
+      for (var i = 0; i < arr.length; i++){
+        var el = arr[i];
+        if (typeof el === 'string' && socIds.indexOf(el) > -1) return true; // lien par ID
+        if (socNames.indexOf(norm(el)) > -1) return true;                   // correspondance par nom
+      }
+      return false;
+    }
     var all = [];
     var offset = null;
     do {
@@ -205,10 +220,7 @@ async function init() {
       offset = d2.offset || null;
     } while (offset);
     salaries = all.filter(function(r) {
-      var s = r.fields['Société'];
-      if (!s) return false;
-      if (Array.isArray(s)) return s.indexOf(socId) > -1;
-      return s === socId;
+      return matchSoc(r.fields['Société']);
     }).map(function(r) {
       return { id: r.id, nom: r.fields['Nom Prénom'] || '', poste: r.fields['Poste'] || '' };
     });
@@ -402,7 +414,7 @@ async function submitForm() {
       }
     }
     // Calculer le statut selon le nombre de salariés soumis ce mois
-    var f2 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
+    var f2 = 'UPPER(TRIM({Nom Société}))="' + societe.toUpperCase() + '"';
     var r3 = await fetch('https://api.airtable.com/v0/' + BASE + '/Soci%C3%A9t%C3%A9s?filterByFormula=' + encodeURIComponent(f2), { headers: H });
     var d3 = await r3.json();
     if (d3.records && d3.records.length) {
