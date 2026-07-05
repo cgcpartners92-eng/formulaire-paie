@@ -391,7 +391,7 @@ async function submitForm() {
             var fd = new FormData();
             fd.append('file', files[f]);
             fd.append('upload_preset', PRESET);
-            var cr = await fetch('https://api.cloudinary.com/v1_1/' + CLOUD + '/auto/upload', { method: 'POST', body: fd });
+            var cr = await fetch('https://api.cloudinary.com/v1_1/' + CLOUD + '/raw/upload', { method: 'POST', body: fd });
             var cd = await cr.json();
             if (cd.secure_url) {
               attachments.push({ url: cd.secure_url, filename: files[f].name });
