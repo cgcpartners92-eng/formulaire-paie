@@ -17,6 +17,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
 .required { color: #EF4444; margin-left: 3px; }
 .field-hint { font-size: 12px; color: #6B7A8D; margin: -2px 0 6px; line-height: 1.35; }
+.salarie-row.done { background: #F3F4F6; border-color: #E5E7EB; cursor: default; opacity: 0.85; }
+.salarie-row.done:hover { border-color: #E5E7EB; background: #F3F4F6; }
+.badge-done { font-size: 11px; font-weight: 600; color: #166534; background: #DCFCE7; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
 input, select, textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #D1D5DB; border-radius: 8px; font-size: 14px; color: #111827; background: #fff; transition: border-color 0.15s; appearance: none; -webkit-appearance: none; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
@@ -182,6 +185,9 @@ var varsData = {};
 var curTab = 0;
 var uploadedFiles = {};
 var socId = null;
+var socNames = [];
+var submittedNames = {};
+function norm(x){ return ('' + x).trim().toUpperCase(); }
 
 async function init() {
   document.getElementById('header-sub').textContent = societe || 'Formulaire de saisie';
@@ -196,10 +202,9 @@ async function init() {
     if (!d1.records.length) throw new Error('Société introuvable');
     // Toutes les fiches société correspondant au nom (gère doublons) + noms normalisés
     var socIds = d1.records.map(function(r){ return r.id; });
-    var socNames = d1.records.map(function(r){ return (r.fields['Nom Société'] || '').trim().toUpperCase(); });
+    socNames = d1.records.map(function(r){ return (r.fields['Nom Société'] || '').trim().toUpperCase(); });
     socNames.push(societe.trim().toUpperCase());
     socId = d1.records[0].id;
-    function norm(x){ return ('' + x).trim().toUpperCase(); }
     function matchSoc(val){
       if (!val) return false;
       var arr = Array.isArray(val) ? val : [val];
@@ -226,7 +231,11 @@ async function init() {
     });
     document.getElementById('loading').style.display = 'none';
     document.getElementById('form-content').style.display = 'block';
+    await loadSubmitted();
     renderSalaries();
+    document.getElementById('mois').addEventListener('change', function(){
+      loadSubmitted().then(renderSalaries);
+    });
   } catch(e) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('error-msg').style.display = 'block';
@@ -235,10 +244,40 @@ async function init() {
   }
 }
 
+async function loadSubmitted() {
+  submittedNames = {};
+  try {
+    var moisVal = document.getElementById('mois').value;
+    if (!moisVal) return;
+    var fS = '{Mois}="' + moisVal + '"';
+    var offset = null;
+    do {
+      var url = 'https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(fS) + (offset ? '&offset=' + offset : '');
+      var r = await fetch(url, { headers: H });
+      if (!r.ok) break;
+      var d = await r.json();
+      (d.records || []).forEach(function(rec){
+        if (socNames.indexOf(norm(rec.fields['Nom société'])) > -1 && rec.fields['Nom du salarié']) {
+          submittedNames[norm(rec.fields['Nom du salarié'])] = true;
+        }
+      });
+      offset = d.offset || null;
+    } while (offset);
+  } catch(e) { /* si ça échoue, on affiche simplement tous les salariés */ }
+}
+
 function renderSalaries() {
   var list = document.getElementById('salaries-list');
   list.innerHTML = salaries.map(function(s, i) {
+    var done = submittedNames[norm(s.nom)];
     var a = selected.indexOf(i) > -1;
+    if (done) {
+      return '<div class="salarie-row done">' +
+        '<div class="salarie-check" style="border:none">✅</div>' +
+        '<div style="flex:1"><div class="salarie-name">' + s.nom + '</div>' +
+        (s.poste ? '<div class="salarie-poste">' + s.poste + '</div>' : '') + '</div>' +
+        '<span class="badge-done">Déjà envoyé ce mois</span></div>';
+    }
     return '<div class="salarie-row' + (a?' active':'') + '" onclick="toggleSalarie(' + i + ')">' +
       '<div class="salarie-check">' + (a?'✓':'') + '</div>' +
       '<div><div class="salarie-name">' + s.nom + '</div>' +
@@ -250,6 +289,7 @@ function renderSalaries() {
 }
 
 function toggleSalarie(i) {
+  if (submittedNames[norm(salaries[i].nom)]) return;
   var idx = selected.indexOf(i);
   if (idx > -1) { selected.splice(idx, 1); } else { selected.push(i); if (!varsData[i]) varsData[i] = {}; }
   renderSalaries();
