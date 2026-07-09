@@ -328,33 +328,45 @@ document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
-async function handleFiles(files) {
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result.split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleFiles(files) {
   var fileList = document.getElementById('modal-file-list');
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
     if (file.size > 20 * 1024 * 1024) { alert('Fichier trop volumineux : ' + file.name + ' (max 20 Mo)'); continue; }
-    var itemId = 'fi_' + Date.now() + '_' + i;
+    currentFiles.push(file);
     var div = document.createElement('div');
-    div.id = itemId;
     div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F0F7FF;border-radius:6px;margin-top:4px;font-size:13px;';
-    div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + file.name + '</span><span id="st_' + itemId + '" style="color:#F59E0B">⏳ Upload…</span>';
+    div.innerHTML = '<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + file.name + '</span><span style="color:#16A34A;white-space:nowrap">✅ Prêt</span>';
     fileList.appendChild(div);
-    try {
-      var fd = new FormData();
-      fd.append('file', file);
-      fd.append('upload_preset', CLOUDINARY_PRESET);
-      var res = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/auto/upload', { method: 'POST', body: fd });
-      var data = await res.json();
-      if (!data.secure_url) throw new Error(data.error ? data.error.message : 'Échec upload');
-      currentFiles.push({ name: file.name, url: data.secure_url });
-      document.getElementById('st_' + itemId).textContent = '✅ Prêt';
-      document.getElementById('st_' + itemId).style.color = '#16A34A';
-    } catch(err) {
-      document.getElementById('st_' + itemId).textContent = '❌ Erreur';
-      document.getElementById('st_' + itemId).style.color = '#DC2626';
-    }
   }
   document.getElementById('modal-file-input').value = '';
+}
+
+async function uploadAttachmentToAirtable(recordId, file) {
+  var b64 = await fileToBase64(file);
+  var mimeType = file.type || 'application/octet-stream';
+  var resp = await fetch(
+    'https://content.airtable.com/v0/' + BASE + '/' + recordId + '/Pi%C3%A8ce%20jointe/uploadAttachment',
+    {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentType: mimeType, filename: file.name, file: b64 })
+    }
+  );
+  if (!resp.ok) {
+    var err = await resp.json();
+    throw new Error(err.error ? err.error.message : 'Erreur upload Airtable');
+  }
+  return resp.json();
 }
 
 async function submitEmployee() {
@@ -395,9 +407,25 @@ async function submitEmployee() {
         'Tickets restaurant': parseInt(document.getElementById('m-tickets').value) || 0,
         'Notes de frais (€)': parseFloat(document.getElementById('m-frais').value) || 0,
         'Commentaire': document.getElementById('m-commentaire').value || '',
-        'Pièce jointe': currentFiles.map(function(f) { return { url: f.url, filename: f.name }; })
+        'Pièce jointe': []
       }})
     });
+
+    // Upload files directly to Airtable after record creation
+    if (currentFiles.length > 0) {
+      var varResp2 = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent('AND({Nom du salarié}="' + s.nom + '",{Mois}="' + mois + '",{Nom société}="' + societe + '")') + '&sort[0][field]=Mois&sort[0][direction]=desc&maxRecords=1', { headers: H });
+      var varData2 = await varResp2.json();
+      if (varData2.records && varData2.records.length > 0) {
+        var newRecordId = varData2.records[0].id;
+        for (var fi = 0; fi < currentFiles.length; fi++) {
+          try {
+            await uploadAttachmentToAirtable(newRecordId, currentFiles[fi]);
+          } catch(uploadErr) {
+            console.error('Upload PJ erreur:', uploadErr);
+          }
+        }
+      }
+    }
 
     sentIndexes.push(currentIndex);
     closeModal();
