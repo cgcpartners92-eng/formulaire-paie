@@ -1,6 +1,7 @@
 // api/embauche.js — CGC Partners
 // Réception des données d'un nouveau salarié + upload des documents dans Dropbox.
 // Route les fichiers vers /2 PAIE/<Société>/Nouveaux salariés/<AAAA-MM-JJ_NOM>/
+// La fiche PDF est générée côté navigateur puis envoyée via action:"file".
 
 const DOSSIERS = [
   "Cyber-soft","SPTB","TRUCK MASTER","BOLTI","IEC INTERNATIONAL","ZIDRA BTP","SRG",
@@ -35,6 +36,117 @@ function nettoyer(s) {
 function dropboxArg(obj) {
   return JSON.stringify(obj).replace(/[\u007f-\uffff]/g,
     c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+}
+
+async function obtenirToken() {
+  const params = new URLSearchParams();
+  params.set("grant_type", "refresh_token");
+  params.set("refresh_token", process.env.DROPBOX_REFRESH_TOKEN);
+  const auth = Buffer.from(
+    process.env.DROPBOX_APP_KEY + ":" + process.env.DROPBOX_APP_SECRET
+  ).toString("base64");
+
+  const r = await fetch("https://api.dropbox.com/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Authorization": "Basic " + auth,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  });
+  const j = await r.json();
+  if (!j.access_token) throw new Error("Token Dropbox : " + JSON.stringify(j));
+  return j.access_token;
+}
+
+async function televerser(token, chemin, buffer) {
+  const r = await fetch("https://content.dropboxapi.com/2/files/upload", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Dropbox-API-Arg": dropboxArg({
+        path: chemin, mode: "add", autorename: true, mute: false, strict_conflict: false
+      }),
+      "Content-Type": "application/octet-stream"
+    },
+    body: buffer
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("Upload Dropbox " + r.status + " : " + t);
+  }
+  return r.json();
+}
+
+async function notifier(e, societe) {
+  const t = process.env.TELEGRAM_BOT_TOKEN, c = process.env.TELEGRAM_CHAT_ID;
+  if (!t || !c) return;
+  const msg =
+    "🆕 Nouveau salarié / Новый сотрудник\n" +
+    "Société : " + societe + "\n" +
+    "Nom : " + (e.nom || "—") + "\n" +
+    "Poste : " + (e.poste || "—") + "\n" +
+    "Contrat : " + (e.typeContrat || "—");
+  try {
+    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: c, text: msg })
+    });
+  } catch (_) {}
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  if (req.method === "OPTIONS") { res.status(200).end(); return; }
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "Méthode non autorisée" });
+    return;
+  }
+
+  try {
+    let body = req.body;
+    if (typeof body === "string") body = JSON.parse(body);
+    if (Buffer.isBuffer(body)) body = JSON.parse(body.toString("utf8"));
+    if (!body || typeof body !== "object") {
+      res.status(400).json({ ok: false, error: "Corps de requête invalide" });
+      return;
+    }
+
+    const dossier = resoudreDossier(body.societe);
+    if (!dossier) {
+      res.status(400).json({ ok: false, error: "Société inconnue : " + (body.societe || "") });
+      return;
+    }
+
+    if (body.action === "data") {
+      await notifier(body.employee || {}, dossier);
+      res.status(200).json({ ok: true, dossier });
+      return;
+    }
+
+    if (body.action === "file") {
+      if (!body.base64) {
+        res.status(400).json({ ok: false, error: "Fichier vide" });
+        return;
+      }
+      const token = await obtenirToken();
+      const boite = nettoyer(body.dossier);
+      const base = `${RACINE}/${dossier}/${SOUS_DOSSIER}/${boite}`;
+      const nomFichier = nettoyer(body.filename);
+      const buf = Buffer.from(body.base64, "base64");
+      const result = await televerser(token, `${base}/${nomFichier}`, buf);
+      res.status(200).json({ ok: true, path: result.path_display || `${base}/${nomFichier}` });
+      return;
+    }
+
+    res.status(400).json({ ok: false, error: "Action inconnue" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
+  }
+}    c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
 }
 
 async function obtenirToken() {
