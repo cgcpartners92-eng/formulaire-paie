@@ -156,6 +156,7 @@ function ficheHtml(e, societe) {
       ligne("Début du contrat", "Начало контракта", e.dateDebut),
       ligne("Type de contrat", "Тип контракта", e.typeContrat),
       ligne("Fin (si CDD)", "Окончание (срочный)", e.dateFin),
+      ligne("Adresse du chantier", "Адрес объекта", e.adresseChantier),
       ligne("Heures / semaine", "Часов в неделю", e.heures)
     ]) +
     bloc("03", "Rémunération", "Заработная плата", [
@@ -249,7 +250,7 @@ async function creerSalarie(e, societe) {
   if (contrat) fields["fldKdEis3uqZhxrIA"] = [contrat];           // Type de contrat
   const qualif = mapQualif(e.statut);
   if (qualif) fields["fld7632DZubjDnDlW"] = [qualif];             // Qualification
-  const comm = [e.qualificationCCN, e.commentaires].filter(Boolean).join("\n");
+  const comm = [e.qualificationCCN, e.adresseChantier ? "Chantier : " + e.adresseChantier : "", e.commentaires].filter(Boolean).join("\n");
   if (comm) fields["fldDlK3Qmx6czbTTo"] = comm;                   // Commentaire
   try {
     const sid = await trouverSocieteId(societe);
