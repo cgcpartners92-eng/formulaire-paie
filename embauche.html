@@ -96,6 +96,13 @@
 
       <div class="card">
         <div class="seclab"><span class="t">Informations personnelles<span class="ru">Личная информация</span></span></div>
+        <div class="field">
+          <label class="lab">Civilité <span class="ru">/ Обращение</span><span class="req">*</span></label>
+          <div class="seg">
+            <label><input type="radio" name="civilite" value="M." required><span>M.<small>Г-н</small></span></label>
+            <label><input type="radio" name="civilite" value="Mme"><span>Mme<small>Г-жа</small></span></label>
+          </div>
+        </div>
         <div class="two">
           <div class="field">
             <label class="lab" for="nom">Nom <span class="ru">/ Фамилия</span><span class="req">*</span></label>
@@ -328,7 +335,7 @@ form.addEventListener("submit", async (e) => {
   if (!form.reportValidity()) return;
 
   const employee = {
-    nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
+    civilite: radio("civilite"), nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
     lieuNaissance: val("lieuNaissance"), nationalite: val("nationalite"), adresse: val("adresse"),
     poste: val("poste"), statut: radio("statut"), qualificationCCN: val("qualificationCCN"), dateDebut: fmt("dateDebut"),
     typeContrat: radio("typeContrat"), dateFin: fmt("dateFin"), heures: val("heures"),
