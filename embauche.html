@@ -96,9 +96,15 @@
 
       <div class="card">
         <div class="seclab"><span class="t">Informations personnelles<span class="ru">Личная информация</span></span></div>
-        <div class="field">
-          <label class="lab" for="nom">Nom Prénom <span class="ru">/ Имя Фамилия</span><span class="req">*</span></label>
-          <input type="text" id="nom" required>
+        <div class="two">
+          <div class="field">
+            <label class="lab" for="nom">Nom <span class="ru">/ Фамилия</span><span class="req">*</span></label>
+            <input type="text" id="nom" required>
+          </div>
+          <div class="field">
+            <label class="lab" for="prenom">Prénom <span class="ru">/ Имя</span><span class="req">*</span></label>
+            <input type="text" id="prenom" required>
+          </div>
         </div>
         <div class="two">
           <div class="field">
@@ -138,6 +144,10 @@
             <label><input type="radio" name="statut" value="Cadre"><span>Cadre<small>Кадр</small></span></label>
             <label><input type="radio" name="statut" value="Non-cadre"><span>Non-cadre<small>Не кадр</small></span></label>
           </div>
+        </div>
+        <div class="field">
+          <label class="lab" for="qualificationCCN">Qualification selon CCN <span class="ru">/ Квалификация по CCN</span></label>
+          <input type="text" id="qualificationCCN" placeholder="Niveau / Position / Coefficient">
         </div>
         <div class="two">
           <div class="field">
@@ -318,16 +328,17 @@ form.addEventListener("submit", async (e) => {
   if (!form.reportValidity()) return;
 
   const employee = {
-    nom: val("nom"), secu: val("secu"), naissance: fmt("naissance"),
+    nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
     lieuNaissance: val("lieuNaissance"), nationalite: val("nationalite"), adresse: val("adresse"),
-    poste: val("poste"), statut: radio("statut"), dateDebut: fmt("dateDebut"),
+    poste: val("poste"), statut: radio("statut"), qualificationCCN: val("qualificationCCN"), dateDebut: fmt("dateDebut"),
     typeContrat: radio("typeContrat"), dateFin: fmt("dateFin"), heures: val("heures"),
     salaireHoraire: val("salaireHoraire"), salaireMensuel: val("salaireMensuel"),
     transport: val("transport"), sante: val("sante"),
     commentaires: val("commentaires"), responsable: val("responsable")
   };
 
-  const nomDossier = (employee.nom || "SANS_NOM").toUpperCase().replace(/\s+/g, "_");
+  const nomComplet = ((employee.nom || "") + " " + (employee.prenom || "")).trim() || "SANS_NOM";
+  const nomDossier = nomComplet.toUpperCase().replace(/\s+/g, "_");
   const dossier = isoJour + "_" + nomDossier;
   const aEnvoyer = Object.entries(fichiers);
 
