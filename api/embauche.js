@@ -82,7 +82,7 @@ async function notifier(e, societe) {
   const msg =
     "🆕 Nouveau salarié / Новый сотрудник\n" +
     "Société : " + societe + "\n" +
-    "Nom : " + (((e.nom||"") + " " + (e.prenom||"")).trim() || "—") + "\n" +
+    "Nom : " + (((e.civilite? e.civilite+" ":"") + (e.nom||"") + " " + (e.prenom||"")).trim() || "—") + "\n" +
     "Poste : " + (e.poste || "—") + "\n" +
     "Contrat : " + (e.typeContrat || "—");
   try {
@@ -141,7 +141,7 @@ function ficheHtml(e, societe) {
     '<div class="pills"><span class="pill">Société : ' + esc(societe) + '</span>' +
     '<span class="pill g">Reçu le / Получено : ' + esc(dateFr) + '</span></div>' +
     bloc("01", "Informations personnelles", "Личная информация", [
-      ligne("Nom", "Фамилия", e.nom),
+      ligne("Nom", "Фамилия", (e.civilite ? e.civilite + " " : "") + (e.nom || "")),
       ligne("Prénom", "Имя", e.prenom),
       ligne("N° sécurité sociale", "Соц. страхование", e.secu),
       ligne("Date de naissance", "Дата рождения", e.naissance),
@@ -171,6 +171,102 @@ function ficheHtml(e, societe) {
     '</div></body></html>';
 }
 
+
+// ---------- Airtable : création de la fiche salarié ----------
+const AIRTABLE_BASE = "appaXD2psEtqq4OeD";
+const T_SALARIES = "tblfHegqr9QXii4qK";
+
+async function tgText(msg) {
+  const t = process.env.TELEGRAM_BOT_TOKEN, c = process.env.TELEGRAM_CHAT_ID;
+  if (!t || !c) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: c, text: msg })
+    });
+  } catch (_) {}
+}
+
+function normNom(s) {
+  return String(s || "").normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function trouverSocieteId(nom) {
+  const cible = normNom(nom);
+  const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Sociétés") + "?pageSize=100";
+  const r = await fetch(url, { headers: { Authorization: "Bearer " + process.env.AIRTABLE_TOKEN } });
+  if (!r.ok) throw new Error("Airtable GET Sociétés " + r.status);
+  const j = await r.json();
+  for (const rec of (j.records || [])) {
+    const n = rec.fields && rec.fields["Nom Société"];
+    if (n && normNom(n) === cible) return rec.id;
+  }
+  return null;
+}
+
+function isoDate(s) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || "").trim());
+  return m ? m[3] + "-" + m[2] + "-" + m[1] : "";
+}
+function mapContrat(v) {
+  const t = String(v || "").toLowerCase();
+  if (t === "cdi") return "CDI";
+  if (t === "cdd") return "CDD";
+  if (t === "cdi de chantier") return "CDI de Chantier";
+  return v || "";
+}
+function mapQualif(statut) {
+  const t = String(statut || "").toLowerCase();
+  if (t === "cadre") return "Cadre";
+  if (t === "non-cadre" || t === "non cadre") return "NON CADRE";
+  return statut || "";
+}
+function salaireTxt(e) {
+  const p = [];
+  if (e.salaireMensuel) p.push(e.salaireMensuel + "€/mois");
+  if (e.salaireHoraire) p.push(e.salaireHoraire + "€/h");
+  return p.join(" · ");
+}
+
+async function creerSalarie(e, societe) {
+  if (!process.env.AIRTABLE_TOKEN) throw new Error("AIRTABLE_TOKEN manquant");
+  const nomComplet = ((e.civilite ? e.civilite + " " : "") + (e.nom || "").toUpperCase() + " " + (e.prenom || "").toUpperCase())
+    .replace(/\s+/g, " ").trim();
+
+  const fields = {
+    "fldBBOW4bDItXqIpV": nomComplet,               // Nom Prénom
+    "fldCRaDGm1TGkJwax": e.poste || "",            // Poste
+    "fld89mSi8Q7ybLoDr": e.adresse || "",          // Adresse
+    "fldoowaQQiSlQaVdc": e.secu || "",             // Numéro SS
+    "fldDDLTMeZzf91lqR": salaireTxt(e),            // Salaire
+    "fldNh5wTz2Di7RoMq": ["Actif"],                // Statut
+    "fld6BbVImwUabStcp": true                       // À vérifier
+  };
+  const entree = isoDate(e.dateDebut);
+  if (entree) fields["fldEPSMzffB8NRjVL"] = entree;               // Entrée
+  if (e.heures) fields["fldK8UJoLu77g3b7f"] = Number(String(e.heures).replace(",", ".")); // H. hebdo
+  const contrat = mapContrat(e.typeContrat);
+  if (contrat) fields["fldKdEis3uqZhxrIA"] = [contrat];           // Type de contrat
+  const qualif = mapQualif(e.statut);
+  if (qualif) fields["fld7632DZubjDnDlW"] = [qualif];             // Qualification
+  const comm = [e.qualificationCCN, e.commentaires].filter(Boolean).join("\n");
+  if (comm) fields["fldDlK3Qmx6czbTTo"] = comm;                   // Commentaire
+  try {
+    const sid = await trouverSocieteId(societe);
+    if (sid) fields["fldiDRqF71opC2xnd"] = [sid];                 // Société (lien)
+  } catch (_) {}
+
+  Object.keys(fields).forEach(k => { if (fields[k] === "" || fields[k] == null) delete fields[k]; });
+
+  const r = await fetch("https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + T_SALARIES, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + process.env.AIRTABLE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ records: [{ fields }], typecast: true })
+  });
+  if (!r.ok) throw new Error("Airtable create " + r.status + " : " + (await r.text()).slice(0, 200));
+  return r.json();
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -197,6 +293,11 @@ export default async function handler(req, res) {
       const html = ficheHtml(body.employee || {}, dossier);
       await televerser(token, `${base}/_Fiche_salarie.html`, Buffer.from(html, "utf8"));
       await notifier(body.employee || {}, dossier);
+      try {
+        await creerSalarie(body.employee || {}, dossier);
+      } catch (err) {
+        await tgText("⚠️ Airtable : fiche salarié non créée pour « " + ((body.employee||{}).nom || "?") + " » (" + dossier + ") — à ajouter à la main.\n" + String(err && err.message ? err.message : err));
+      }
       res.status(200).json({ ok: true, dossier }); return;
     }
 
