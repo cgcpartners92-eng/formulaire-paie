@@ -31,6 +31,13 @@
   textarea{resize:vertical;min-height:64px}
   input[readonly]{background:var(--ro);color:var(--muted)}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .namerow{display:grid;grid-template-columns:84px 1fr 1fr;gap:10px}
+  @media(max-width:520px){.namerow{grid-template-columns:64px 1fr 1fr}}
+  select{width:100%;font-family:inherit;font-size:15px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:11px;padding:13px 8px;outline:none}
+  select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(44,107,230,.12)}
+  select:required:invalid{color:#AAB3C0}
+  select option{color:var(--ink)}
+  select option[value=""]{color:#AAB3C0}
   @media(max-width:520px){.two{grid-template-columns:1fr}}
   .seg{display:flex;gap:10px}
   .seg.three{flex-wrap:wrap}
@@ -97,20 +104,15 @@
       <div class="card">
         <div class="seclab"><span class="t">Informations personnelles<span class="ru">Личная информация</span></span></div>
         <div class="field">
-          <label class="lab">Civilité <span class="ru">/ Обращение</span><span class="req">*</span></label>
-          <div class="seg">
-            <label><input type="radio" name="civilite" value="M." required><span>M.<small>Г-н</small></span></label>
-            <label><input type="radio" name="civilite" value="Mme"><span>Mme<small>Г-жа</small></span></label>
-          </div>
-        </div>
-        <div class="two">
-          <div class="field">
-            <label class="lab" for="nom">Nom <span class="ru">/ Фамилия</span><span class="req">*</span></label>
-            <input type="text" id="nom" required>
-          </div>
-          <div class="field">
-            <label class="lab" for="prenom">Prénom <span class="ru">/ Имя</span><span class="req">*</span></label>
-            <input type="text" id="prenom" required>
+          <label class="lab">Nom et prénom <span class="ru">/ Фамилия и имя</span><span class="req">*</span></label>
+          <div class="namerow">
+            <select id="civilite" required aria-label="Civilité">
+              <option value="" disabled selected>M./Mme</option>
+              <option value="M.">M.</option>
+              <option value="Mme">Mme</option>
+            </select>
+            <input type="text" id="nom" placeholder="Nom / Фамилия" required>
+            <input type="text" id="prenom" placeholder="Prénom / Имя" required>
           </div>
         </div>
         <div class="two">
@@ -177,6 +179,10 @@
         <div class="field hidden" id="champFin">
           <label class="lab" for="dateFin">Fin du CDD <span class="ru">/ Окончание срочного</span></label>
           <input type="date" id="dateFin">
+        </div>
+        <div class="field hidden" id="champChantier">
+          <label class="lab" for="adresseChantier">Adresse du chantier <span class="ru">/ Адрес объекта</span></label>
+          <input type="text" id="adresseChantier" placeholder="Lieu du chantier / Место работ">
         </div>
       </div>
 
@@ -323,7 +329,9 @@ function compresserImage(file) {
 
 document.querySelectorAll('input[name=typeContrat]').forEach(r =>
   r.addEventListener("change", () => {
-    document.getElementById("champFin").classList.toggle("hidden", document.getElementById("cdd").checked === false);
+    const v = (document.querySelector('input[name=typeContrat]:checked') || {}).value;
+    document.getElementById("champFin").classList.toggle("hidden", v !== "CDD");
+    document.getElementById("champChantier").classList.toggle("hidden", v !== "CDI de chantier");
   })
 );
 
@@ -335,10 +343,10 @@ form.addEventListener("submit", async (e) => {
   if (!form.reportValidity()) return;
 
   const employee = {
-    civilite: radio("civilite"), nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
+    civilite: val("civilite"), nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
     lieuNaissance: val("lieuNaissance"), nationalite: val("nationalite"), adresse: val("adresse"),
     poste: val("poste"), statut: radio("statut"), qualificationCCN: val("qualificationCCN"), dateDebut: fmt("dateDebut"),
-    typeContrat: radio("typeContrat"), dateFin: fmt("dateFin"), heures: val("heures"),
+    typeContrat: radio("typeContrat"), dateFin: fmt("dateFin"), adresseChantier: val("adresseChantier"), heures: val("heures"),
     salaireHoraire: val("salaireHoraire"), salaireMensuel: val("salaireMensuel"),
     transport: val("transport"), sante: val("sante"),
     commentaires: val("commentaires"), responsable: val("responsable")
