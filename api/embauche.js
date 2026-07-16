@@ -82,7 +82,7 @@ async function notifier(e, societe) {
   const msg =
     "🆕 Nouveau salarié / Новый сотрудник\n" +
     "Société : " + societe + "\n" +
-    "Nom : " + (e.nom || "—") + "\n" +
+    "Nom : " + (((e.nom||"") + " " + (e.prenom||"")).trim() || "—") + "\n" +
     "Poste : " + (e.poste || "—") + "\n" +
     "Contrat : " + (e.typeContrat || "—");
   try {
@@ -105,7 +105,7 @@ function ficheHtml(e, societe) {
 
   return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>Fiche — ' + esc(e.nom || "salarié") + ' — ' + esc(societe) + '</title>' +
+    '<title>Fiche — ' + esc(((e.nom||"") + " " + (e.prenom||"")).trim() || "salarié") + ' — ' + esc(societe) + '</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&display=swap&subset=cyrillic,latin" rel="stylesheet">' +
     '<style>' +
     ':root{--ink:#17242B;--muted:#6E7B82;--accent:#1F6E64;--soft:#E7F0EE;--line:#EEF0ED}' +
@@ -141,7 +141,8 @@ function ficheHtml(e, societe) {
     '<div class="pills"><span class="pill">Société : ' + esc(societe) + '</span>' +
     '<span class="pill g">Reçu le / Получено : ' + esc(dateFr) + '</span></div>' +
     bloc("01", "Informations personnelles", "Личная информация", [
-      ligne("Nom Prénom", "Имя Фамилия", e.nom),
+      ligne("Nom", "Фамилия", e.nom),
+      ligne("Prénom", "Имя", e.prenom),
       ligne("N° sécurité sociale", "Соц. страхование", e.secu),
       ligne("Date de naissance", "Дата рождения", e.naissance),
       ligne("Lieu de naissance", "Место рождения", e.lieuNaissance),
@@ -151,6 +152,7 @@ function ficheHtml(e, societe) {
     bloc("02", "Poste et contrat", "Должность и контракт", [
       ligne("Poste", "Должность", e.poste),
       ligne("Statut", "Статус", e.statut),
+      ligne("Qualification selon CCN", "Квалификация по CCN", e.qualificationCCN),
       ligne("Début du contrat", "Начало контракта", e.dateDebut),
       ligne("Type de contrat", "Тип контракта", e.typeContrat),
       ligne("Fin (si CDD)", "Окончание (срочный)", e.dateFin),
