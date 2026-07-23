@@ -157,12 +157,38 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
           <input type="number" step="0.01" placeholder="0" id="m-heures-sup">
         </div>
         <div class="form-group">
-          <label>Absences (jours)</label>
-          <input type="number" step="0.5" placeholder="0" id="m-absences">
+          <label>Absences (jours calendaires)</label>
+          <input type="number" step="0.5" placeholder="0" id="m-absences" oninput="toggleAbsenceDates()">
+        </div>
+        <div class="form-group" id="absence-dates-group" style="grid-column:1 / -1; display:none;">
+          <label>Dates de l'absence</label>
+          <div class="grid-2">
+            <div>
+              <label style="font-weight:400;color:#6B7A8D;">du</label>
+              <input type="date" id="m-absence-debut">
+            </div>
+            <div>
+              <label style="font-weight:400;color:#6B7A8D;">au</label>
+              <input type="date" id="m-absence-fin">
+            </div>
+          </div>
         </div>
         <div class="form-group">
-          <label>Congés (jours)</label>
-          <input type="number" step="0.5" placeholder="0" id="m-conges">
+          <label>Congés (jours calendaires)</label>
+          <input type="number" step="0.5" placeholder="0" id="m-conges" oninput="toggleCongeDates()">
+        </div>
+        <div class="form-group" id="conge-dates-group" style="grid-column:1 / -1; display:none;">
+          <label>Dates du congé</label>
+          <div class="grid-2">
+            <div>
+              <label style="font-weight:400;color:#6B7A8D;">du</label>
+              <input type="date" id="m-conge-debut">
+            </div>
+            <div>
+              <label style="font-weight:400;color:#6B7A8D;">au</label>
+              <input type="date" id="m-conge-fin">
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>Prime (€)</label>
@@ -295,6 +321,40 @@ function renderList() {
   document.getElementById('done-btn').style.display = allSent ? 'flex' : 'none';
 }
 
+function toggleCongeDates() {
+  var v = parseFloat(document.getElementById('m-conges').value) || 0;
+  document.getElementById('conge-dates-group').style.display = v > 0 ? 'block' : 'none';
+}
+
+function toggleAbsenceDates() {
+  var v = parseFloat(document.getElementById('m-absences').value) || 0;
+  document.getElementById('absence-dates-group').style.display = v > 0 ? 'block' : 'none';
+}
+
+function formatAbsenceDates() {
+  var d = document.getElementById('m-absence-debut').value;
+  var f = document.getElementById('m-absence-fin').value;
+  if (!d && !f) return '';
+  if (d && f) return 'du ' + fmtDateFr(d) + ' au ' + fmtDateFr(f);
+  if (d) return 'à partir du ' + fmtDateFr(d);
+  return "jusqu'au " + fmtDateFr(f);
+}
+
+function fmtDateFr(v) {
+  if (!v) return '';
+  var p = v.split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : v;
+}
+
+function formatCongeDates() {
+  var d = document.getElementById('m-conge-debut').value;
+  var f = document.getElementById('m-conge-fin').value;
+  if (!d && !f) return '';
+  if (d && f) return 'du ' + fmtDateFr(d) + ' au ' + fmtDateFr(f);
+  if (d) return 'à partir du ' + fmtDateFr(d);
+  return "jusqu'au " + fmtDateFr(f);
+}
+
 function openModal(i) {
   currentIndex = i;
   currentFiles = [];
@@ -303,7 +363,13 @@ function openModal(i) {
   document.getElementById('m-heures').value = '';
   document.getElementById('m-heures-sup').value = '';
   document.getElementById('m-absences').value = '';
+  document.getElementById('m-absence-debut').value = '';
+  document.getElementById('m-absence-fin').value = '';
+  document.getElementById('absence-dates-group').style.display = 'none';
   document.getElementById('m-conges').value = '';
+  document.getElementById('m-conge-debut').value = '';
+  document.getElementById('m-conge-fin').value = '';
+  document.getElementById('conge-dates-group').style.display = 'none';
   document.getElementById('m-prime').value = '';
   document.getElementById('m-tickets').value = '';
   document.getElementById('m-frais').value = '';
@@ -381,6 +447,28 @@ async function submitEmployee() {
   var moisY = document.getElementById('mois-year').value;
   var mois = moisY + '-' + moisM;
 
+  // Dates obligatoires si des jours sont saisis
+  var absJ = parseFloat(document.getElementById('m-absences').value) || 0;
+  if (absJ > 0 && (!document.getElementById('m-absence-debut').value || !document.getElementById('m-absence-fin').value)) {
+    var me1 = document.getElementById('modal-error');
+    me1.textContent = "Veuillez indiquer les dates de l'absence (du et au).";
+    me1.style.display = 'block';
+    document.getElementById('absence-dates-group').style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
+    return;
+  }
+  var conJ = parseFloat(document.getElementById('m-conges').value) || 0;
+  if (conJ > 0 && (!document.getElementById('m-conge-debut').value || !document.getElementById('m-conge-fin').value)) {
+    var me2 = document.getElementById('modal-error');
+    me2.textContent = 'Veuillez indiquer les dates du congé (du et au).';
+    me2.style.display = 'block';
+    document.getElementById('conge-dates-group').style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
+    return;
+  }
+
   try {
     var sId = s.id;
     if (!sId) {
@@ -402,7 +490,9 @@ async function submitEmployee() {
         'Heures travaillées': parseFloat(document.getElementById('m-heures').value) || 0,
         'Heures supplémentaires': parseFloat(document.getElementById('m-heures-sup').value) || 0,
         'Absences (jours)': parseFloat(document.getElementById('m-absences').value) || 0,
+        'Dates absences': formatAbsenceDates(),
         'Congés (jours)': parseFloat(document.getElementById('m-conges').value) || 0,
+        'Dates congés': formatCongeDates(),
         'Prime (€)': parseFloat(document.getElementById('m-prime').value) || 0,
         'Tickets restaurant': parseInt(document.getElementById('m-tickets').value) || 0,
         'Notes de frais (€)': parseFloat(document.getElementById('m-frais').value) || 0,
