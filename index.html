@@ -245,6 +245,7 @@ var sentIndexes = [];
 var socId = null;
 var currentIndex = null;
 var currentFiles = [];
+var activeCountCache = null;
 
 var CLOUDINARY_CLOUD = 'dxw85arqq';
 var CLOUDINARY_PRESET = 'cgc-paie';
@@ -529,11 +530,7 @@ async function submitEmployee() {
     closeModal();
     renderList();
 
-    if (sentIndexes.length === salaries.length && salaries.length > 0) {
-      await updateStatut(mois, 'Complet');
-    } else if (sentIndexes.length === 1) {
-      await updateStatut(mois, 'En cours');
-    }
+    await refreshStatut(mois);
   } catch(e) {
     btn.disabled = false;
     btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
@@ -549,6 +546,54 @@ async function updateStatut(mois, statut) {
       body: JSON.stringify({ fields: { 'Statut': statut } })
     });
   } catch(e) { console.error('Erreur statut:', e); }
+}
+
+// Compte fiable des salariés actifs (sans date de Sortie) de cette société.
+// Renvoie null si le chargement échoue -> on ne marquera jamais "Complet" par erreur.
+async function countActiveSalaries() {
+  if (activeCountCache !== null) return activeCountCache;
+  try {
+    var all = [], offset = null, ok = true;
+    do {
+      var url = 'https://api.airtable.com/v0/' + BASE + '/Salari%C3%A9s?pageSize=100' + (offset ? '&offset=' + offset : '');
+      var r = await fetch(url, { headers: H });
+      if (!r.ok) { ok = false; break; }
+      var d = await r.json();
+      all = all.concat(d.records || []);
+      offset = d.offset || null;
+    } while (offset);
+    if (!ok) return null;
+    var n = all.filter(function(rec) {
+      var s = rec.fields['Société'];
+      var inSoc = Array.isArray(s) ? (s.indexOf(socId) > -1) : (s === socId);
+      if (!inSoc) return false;
+      var sortie = rec.fields['Sortie'] || rec.fields['Date de sortie'] || rec.fields['sortie'] || null;
+      return !sortie;
+    }).length;
+    activeCountCache = n;
+    return n;
+  } catch(e) {
+    console.error('countActiveSalaries', e);
+    return null;
+  }
+}
+
+// Détermine le statut d'après les données réelles d'Airtable (et non la session du client) :
+// "Complet" seulement si le nombre de fiches saisies pour le mois >= nombre de salariés actifs.
+async function refreshStatut(mois) {
+  try {
+    var ff = 'AND({Nom société}="' + societe + '",{Mois}="' + mois + '")';
+    var rf = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(ff) + '&fields%5B%5D=Mois', { headers: H });
+    var dfj = await rf.json();
+    var filled = (dfj.records || []).length;
+    if (filled < 1) return;
+    var active = await countActiveSalaries();
+    if (active !== null && active > 0 && filled >= active) {
+      await updateStatut(mois, 'Complet');
+    } else {
+      await updateStatut(mois, 'En cours');
+    }
+  } catch(e) { console.error('refreshStatut', e); }
 }
 
 async function finaliserEnvoi() {
