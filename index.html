@@ -96,6 +96,11 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
     <div style="font-size:42px;margin-bottom:12px">✅</div>
     <h3 style="font-size:18px;font-weight:700;margin-bottom:8px">Toutes les variables ont été soumises !</h3>
     <p style="color:#15803D">Le cabinet CGC Partners a été notifié. Merci !</p>
+    <div style="margin-top:20px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button id="recap-btn" onclick="telechargerRecap()" style="padding:12px 20px;background:#16A34A;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">⬇️ Récapitulatif Excel</button>
+      <button id="recap-pdf-btn" onclick="telechargerRecapPDF()" style="padding:12px 20px;background:#1B3A5C;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">⬇️ Récapitulatif PDF</button>
+    </div>
+    <div style="font-size:12px;color:#6B7A8D;margin-top:10px">Conservez ce récapitulatif pour vos archives — Excel pour vos calculs, PDF pour l'impression.</div>
   </div>
 
   <div id="form-content" style="display:none">
@@ -226,6 +231,9 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 var TOKEN = 'patoB1OOPkaSYoiYk.766fca6f78313ffb2e4ca5aa9b487b67e94d437d553ab8021171381a117f7af4';
 var BASE = 'appaXD2psEtqq4OeD';
@@ -546,6 +554,187 @@ async function updateStatut(mois, statut) {
 async function finaliserEnvoi() {
   document.getElementById('form-content').style.display = 'none';
   document.getElementById('success-msg').style.display = 'block';
+}
+
+async function telechargerRecap() {
+  var btn = document.getElementById('recap-btn');
+  var oldHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Préparation du fichier...';
+  try {
+    var moisM = document.getElementById('mois-month').value;
+    var moisY = document.getElementById('mois-year').value;
+    var mois = moisY + '-' + moisM;
+    var moisLabel = document.getElementById('mois-month').selectedOptions[0].text + ' ' + moisY;
+    var formula = 'AND({Nom société}="' + societe + '",{Mois}="' + mois + '")';
+    var url = 'https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(formula);
+    var resp = await fetch(url, { headers: H });
+    var data = await resp.json();
+    var recs = (data.records || []);
+    if (!recs.length) {
+      btn.innerHTML = '⚠️ Aucune donnée trouvée';
+      setTimeout(function(){ btn.disabled = false; btn.innerHTML = oldHtml; }, 2500);
+      return;
+    }
+    recs.sort(function(a, b) {
+      var na = (a.fields && a.fields['Nom du salarié']) || '';
+      var nb = (b.fields && b.fields['Nom du salarié']) || '';
+      return na.localeCompare(nb);
+    });
+    var header = ['Société','Mois','Salarié','Heures travaillées','Heures supplémentaires','Absences (jours)','Dates absences','Congés (jours)','Dates congés','Prime (€)','Tickets restaurant','Notes de frais (€)','Commentaire'];
+    var rows = [header];
+    recs.forEach(function(r) {
+      var f = r.fields || {};
+      rows.push([
+        societe,
+        moisLabel,
+        f['Nom du salarié'] || '',
+        f['Heures travaillées'] || 0,
+        f['Heures supplémentaires'] || 0,
+        f['Absences (jours)'] || 0,
+        f['Dates absences'] || '',
+        f['Congés (jours)'] || 0,
+        f['Dates congés'] || '',
+        f['Prime (€)'] || 0,
+        f['Tickets restaurant'] || 0,
+        f['Notes de frais (€)'] || 0,
+        f['Commentaire'] || ''
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:18},{wch:16},{wch:22},{wch:16},{wch:20},{wch:15},{wch:24},{wch:14},{wch:24},{wch:10},{wch:16},{wch:16},{wch:32}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Variables paie');
+    var safe = (societe || 'societe').replace(/[^a-zA-Z0-9-_]+/g, '_');
+    XLSX.writeFile(wb, 'Recap_paie_' + safe + '_' + mois + '.xlsx');
+    btn.disabled = false;
+    btn.innerHTML = oldHtml;
+  } catch(e) {
+    console.error('Recap erreur:', e);
+    btn.innerHTML = '⚠️ Erreur, réessayez';
+    setTimeout(function(){ btn.disabled = false; btn.innerHTML = oldHtml; }, 2500);
+  }
+}
+
+async function telechargerRecapPDF() {
+  var btn = document.getElementById('recap-pdf-btn');
+  var oldHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Préparation du PDF...';
+  try {
+    var moisM = document.getElementById('mois-month').value;
+    var moisY = document.getElementById('mois-year').value;
+    var mois = moisY + '-' + moisM;
+    var moisLabel = document.getElementById('mois-month').selectedOptions[0].text + ' ' + moisY;
+    var formula = 'AND({Nom société}="' + societe + '",{Mois}="' + mois + '")';
+    var url = 'https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent(formula);
+    var resp = await fetch(url, { headers: H });
+    var data = await resp.json();
+    var recs = (data.records || []);
+    if (!recs.length) {
+      btn.innerHTML = '⚠️ Aucune donnée trouvée';
+      setTimeout(function(){ btn.disabled = false; btn.innerHTML = oldHtml; }, 2500);
+      return;
+    }
+    recs.sort(function(a, b) {
+      return (((a.fields && a.fields['Nom du salarié']) || '')).localeCompare(((b.fields && b.fields['Nom du salarié']) || ''));
+    });
+
+    function n(v) { return (v === undefined || v === null || v === '') ? 0 : v; }
+    var body = [], tot = { h:0, hs:0, abs:0, cong:0, prime:0, tr:0, frais:0 };
+    recs.forEach(function(r) {
+      var f = r.fields || {};
+      var absCell = String(n(f['Absences (jours)'])) + (f['Dates absences'] ? '\n' + f['Dates absences'] : '');
+      var conCell = String(n(f['Congés (jours)'])) + (f['Dates congés'] ? '\n' + f['Dates congés'] : '');
+      body.push([
+        f['Nom du salarié'] || '',
+        n(f['Heures travaillées']),
+        n(f['Heures supplémentaires']),
+        absCell,
+        conCell,
+        n(f['Prime (€)']),
+        n(f['Tickets restaurant']),
+        n(f['Notes de frais (€)']),
+        f['Commentaire'] || ''
+      ]);
+      tot.h += Number(n(f['Heures travaillées'])) || 0;
+      tot.hs += Number(n(f['Heures supplémentaires'])) || 0;
+      tot.abs += Number(n(f['Absences (jours)'])) || 0;
+      tot.cong += Number(n(f['Congés (jours)'])) || 0;
+      tot.prime += Number(n(f['Prime (€)'])) || 0;
+      tot.tr += Number(n(f['Tickets restaurant'])) || 0;
+      tot.frais += Number(n(f['Notes de frais (€)'])) || 0;
+    });
+
+    var now = new Date();
+    var dd = String(now.getDate()).padStart(2, '0');
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    var dateEnvoi = dd + '/' + mm + '/' + now.getFullYear();
+    var nbSal = recs.length;
+
+    var doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    var pageW = doc.internal.pageSize.getWidth();
+
+    function header() {
+      doc.setFillColor(27, 58, 92); doc.roundedRect(12, 12, 14, 14, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+      doc.text('CGC', 19, 20.5, { align: 'center' });
+      doc.setTextColor(27, 58, 92); doc.setFontSize(14); doc.text('CGC Partners', 29, 18);
+      doc.setTextColor(107, 122, 141); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text('Cabinet de gestion de paie', 29, 23);
+      doc.setTextColor(27, 58, 92); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5);
+      doc.text('Récapitulatif des variables de paie', pageW - 12, 17, { align: 'right' });
+      doc.setTextColor(107, 122, 141); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text('Copie transmise au client pour ses archives', pageW - 12, 22, { align: 'right' });
+      doc.setDrawColor(27, 58, 92); doc.setLineWidth(0.8); doc.line(12, 29, pageW - 12, 29);
+    }
+
+    header();
+    var y = 37;
+    function meta(x, label, val) {
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 122, 141); doc.setFontSize(7.5);
+      doc.text(label.toUpperCase(), x, y);
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39); doc.setFontSize(10.5);
+      doc.text(String(val), x, y + 5);
+    }
+    meta(12, 'Société', societe);
+    meta(90, 'Période', moisLabel);
+    meta(160, 'Nombre de salariés', nbSal);
+    meta(230, "Date d'envoi", dateEnvoi);
+
+    doc.autoTable({
+      startY: 48,
+      head: [['Salarié', 'H. trav.', 'H. supp.', 'Absences (j)', 'Congés (j)', 'Prime (€)', 'Tickets', 'Frais (€)', 'Commentaire']],
+      body: body,
+      foot: [['TOTAL (' + nbSal + ' salariés)', tot.h, tot.hs, tot.abs + ' j', tot.cong + ' j', tot.prime.toFixed(2), tot.tr, tot.frais.toFixed(2), '']],
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'top', lineColor: [229, 231, 235], textColor: [31, 41, 55] },
+      headStyles: { fillColor: [27, 58, 92], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      footStyles: { fillColor: [241, 245, 249], textColor: [17, 24, 39], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+      margin: { left: 12, right: 12, top: 34 },
+      didDrawPage: function(d) { if (d.pageNumber > 1) header(); }
+    });
+
+    var endY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || 60;
+    doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3); doc.line(12, endY + 6, pageW - 12, endY + 6);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 122, 141);
+    var note = "Ce document récapitule les variables de paie transmises par la société pour la période indiquée. Il constitue une copie pour vos archives. En cas d'écart ou d'oubli, merci de contacter le cabinet CGC Partners avant traitement de la paie.";
+    var lines = doc.splitTextToSize(note, pageW - 24);
+    doc.text(lines, 12, endY + 11);
+    doc.setTextColor(156, 163, 175); doc.setFontSize(7);
+    doc.text('CGC Partners — contact@cgcpartners.fr', pageW / 2, endY + 11 + lines.length * 3.5 + 3, { align: 'center' });
+
+    var safe = (societe || 'societe').replace(/[^a-zA-Z0-9-_]+/g, '_');
+    doc.save('Recap_paie_' + safe + '_' + mois + '.pdf');
+    btn.disabled = false;
+    btn.innerHTML = oldHtml;
+  } catch(e) {
+    console.error('PDF erreur:', e);
+    btn.innerHTML = '⚠️ Erreur, réessayez';
+    setTimeout(function(){ btn.disabled = false; btn.innerHTML = oldHtml; }, 2500);
+  }
 }
 
 init();
