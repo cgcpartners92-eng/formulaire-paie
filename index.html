@@ -208,6 +208,17 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
           <input type="number" step="0.01" placeholder="0" id="m-frais">
         </div>
       </div>
+      <div class="form-group" style="background:#FEF9F3;border:1px solid #FCE4CC;border-radius:8px;padding:12px 14px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;margin-bottom:0;">
+          <input type="checkbox" id="m-fin-contrat-check" onchange="toggleFinContrat()" style="width:auto;margin:0;">
+          Fin de contrat ce mois-ci
+        </label>
+        <div id="fin-contrat-group" style="display:none;margin-top:10px;">
+          <label style="font-weight:400;color:#6B7A8D;">Date de fin de contrat</label>
+          <input type="date" id="m-fin-contrat-date">
+          <div style="font-size:12px;color:#9CA3AF;margin-top:4px;">Le salarié sera retiré des prochains mois automatiquement.</div>
+        </div>
+      </div>
       <div class="form-group">
         <label>Commentaire</label>
         <textarea placeholder="Situation particulière, arrêt maladie, remarque..." id="m-commentaire"></textarea>
@@ -335,6 +346,11 @@ function toggleCongeDates() {
   document.getElementById('conge-dates-group').style.display = v > 0 ? 'block' : 'none';
 }
 
+function toggleFinContrat() {
+  var c = document.getElementById('m-fin-contrat-check').checked;
+  document.getElementById('fin-contrat-group').style.display = c ? 'block' : 'none';
+}
+
 function toggleAbsenceDates() {
   var v = parseFloat(document.getElementById('m-absences').value) || 0;
   document.getElementById('absence-dates-group').style.display = v > 0 ? 'block' : 'none';
@@ -383,6 +399,9 @@ function openModal(i) {
   document.getElementById('m-tickets').value = '';
   document.getElementById('m-frais').value = '';
   document.getElementById('m-commentaire').value = '';
+  document.getElementById('m-fin-contrat-check').checked = false;
+  document.getElementById('m-fin-contrat-date').value = '';
+  document.getElementById('fin-contrat-group').style.display = 'none';
   document.getElementById('modal-file-list').innerHTML = '';
   document.getElementById('modal-error').style.display = 'none';
   document.getElementById('modal-file-input').value = '';
@@ -477,6 +496,17 @@ async function submitEmployee() {
     btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
     return;
   }
+  if (document.getElementById('m-fin-contrat-check').checked && !document.getElementById('m-fin-contrat-date').value) {
+    var me3 = document.getElementById('modal-error');
+    me3.textContent = 'Veuillez indiquer la date de fin de contrat.';
+    me3.style.display = 'block';
+    document.getElementById('fin-contrat-group').style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
+    return;
+  }
+
+  var finContrat = document.getElementById('m-fin-contrat-check').checked ? (document.getElementById('m-fin-contrat-date').value || null) : null;
 
   try {
     var sId = s.id;
@@ -506,6 +536,7 @@ async function submitEmployee() {
         'Tickets restaurant': parseInt(document.getElementById('m-tickets').value) || 0,
         'Notes de frais (€)': parseFloat(document.getElementById('m-frais').value) || 0,
         'Commentaire': document.getElementById('m-commentaire').value || '',
+        'Fin de contrat': finContrat,
         'Pièce jointe': []
       }})
     });
@@ -524,6 +555,15 @@ async function submitEmployee() {
           }
         }
       }
+    }
+
+    if (finContrat) {
+      try {
+        await fetch('https://api.airtable.com/v0/' + BASE + '/Salari%C3%A9s/' + sId, {
+          method: 'PATCH', headers: H,
+          body: JSON.stringify({ fields: { 'Sortie': finContrat } })
+        });
+      } catch(sortieErr) { console.error('Sortie update erreur:', sortieErr); }
     }
 
     sentIndexes.push(currentIndex);
@@ -626,7 +666,7 @@ async function telechargerRecap() {
       var nb = (b.fields && b.fields['Nom du salarié']) || '';
       return na.localeCompare(nb);
     });
-    var header = ['Société','Mois','Salarié','Heures travaillées','Heures supplémentaires','Absences (jours)','Dates absences','Congés (jours)','Dates congés','Prime (€)','Tickets restaurant','Notes de frais (€)','Commentaire'];
+    var header = ['Société','Mois','Salarié','Heures travaillées','Heures supplémentaires','Absences (jours)','Dates absences','Congés (jours)','Dates congés','Prime (€)','Tickets restaurant','Notes de frais (€)','Commentaire','Fin de contrat'];
     var rows = [header];
     recs.forEach(function(r) {
       var f = r.fields || {};
@@ -643,11 +683,12 @@ async function telechargerRecap() {
         f['Prime (€)'] || 0,
         f['Tickets restaurant'] || 0,
         f['Notes de frais (€)'] || 0,
-        f['Commentaire'] || ''
+        f['Commentaire'] || '',
+        fmtDateFr(f['Fin de contrat'])
       ]);
     });
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:18},{wch:16},{wch:22},{wch:16},{wch:20},{wch:15},{wch:24},{wch:14},{wch:24},{wch:10},{wch:16},{wch:16},{wch:32}];
+    ws['!cols'] = [{wch:18},{wch:16},{wch:22},{wch:16},{wch:20},{wch:15},{wch:24},{wch:14},{wch:24},{wch:10},{wch:16},{wch:16},{wch:32},{wch:16}];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Variables paie');
     var safe = (societe || 'societe').replace(/[^a-zA-Z0-9-_]+/g, '_');
@@ -700,7 +741,8 @@ async function telechargerRecapPDF() {
         n(f['Prime (€)']),
         n(f['Tickets restaurant']),
         n(f['Notes de frais (€)']),
-        f['Commentaire'] || ''
+        f['Commentaire'] || '',
+        fmtDateFr(f['Fin de contrat'])
       ]);
       tot.h += Number(n(f['Heures travaillées'])) || 0;
       tot.hs += Number(n(f['Heures supplémentaires'])) || 0;
@@ -749,9 +791,9 @@ async function telechargerRecapPDF() {
 
     doc.autoTable({
       startY: 48,
-      head: [['Salarié', 'H. trav.', 'H. supp.', 'Absences (j)', 'Congés (j)', 'Prime (€)', 'Tickets', 'Frais (€)', 'Commentaire']],
+      head: [['Salarié', 'H. trav.', 'H. supp.', 'Absences (j)', 'Congés (j)', 'Prime (€)', 'Tickets', 'Frais (€)', 'Commentaire', 'Fin contrat']],
       body: body,
-      foot: [['TOTAL (' + nbSal + ' salariés)', tot.h, tot.hs, tot.abs + ' j', tot.cong + ' j', tot.prime.toFixed(2), tot.tr, tot.frais.toFixed(2), '']],
+      foot: [['TOTAL (' + nbSal + ' salariés)', tot.h, tot.hs, tot.abs + ' j', tot.cong + ' j', tot.prime.toFixed(2), tot.tr, tot.frais.toFixed(2), '', '']],
       theme: 'grid',
       styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'top', lineColor: [229, 231, 235], textColor: [31, 41, 55] },
       headStyles: { fillColor: [27, 58, 92], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
