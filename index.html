@@ -114,7 +114,8 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       <div class="form-group" style="margin-bottom:0">
         <label>Mois concerné <span style="color:#EF4444">*</span></label>
         <div style="display:flex;gap:8px">
-          <select id="mois-month" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
+          <select id="mois-month" onchange="clearMoisError()" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
+            <option value="" selected>— Choisir / Выбрать —</option>
             <option value="01">Janvier</option><option value="02">Février</option>
             <option value="03">Mars</option><option value="04">Avril</option>
             <option value="05">Mai</option><option value="06">Juin</option>
@@ -126,6 +127,9 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
             <option value="2025">2025</option><option value="2026">2026</option>
             <option value="2027">2027</option><option value="2028">2028</option>
           </select>
+        </div>
+        <div id="mois-error" style="display:none;margin-top:8px;padding:8px 12px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;color:#B91C1C;font-size:13px;font-weight:600;">
+          ⚠️ Veuillez choisir le mois concerné.<br>Пожалуйста, выберите месяц, за который отправляете данные.
         </div>
       </div>
     </div>
@@ -148,7 +152,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
   <div class="modal">
     <div class="modal-header">
       <h2 id="modal-salarie-name">—</h2>
-      <button class="close-btn" onclick="closeModal()">✕</button>
+      <button class="close-btn" onclick="requestCloseModal()">✕</button>
     </div>
     <div class="modal-body">
       <div id="modal-error" class="error-box" style="display:none;margin-bottom:16px"></div>
@@ -256,6 +260,7 @@ var sentIndexes = [];
 var socId = null;
 var currentIndex = null;
 var currentFiles = [];
+var submitting = false;
 var activeCountCache = null;
 
 var CLOUDINARY_CLOUD = 'dxw85arqq';
@@ -265,7 +270,8 @@ async function init() {
   document.getElementById('header-sub').textContent = societe || 'Formulaire de saisie';
   document.getElementById('nom-societe').value = societe;
   var now = new Date();
-  document.getElementById('mois-month').value = String(now.getMonth()+1).padStart(2,'0');
+  // Le mois n'est PAS pré-rempli : le client doit le choisir volontairement
+  // (évite les envois par erreur sur le mois courant au lieu du mois de paie).
   document.getElementById('mois-year').value = String(now.getFullYear());
   try {
     var f1 = 'UPPER({Nom Société})="' + societe.toUpperCase() + '"';
@@ -380,7 +386,28 @@ function formatCongeDates() {
   return "jusqu'au " + fmtDateFr(f);
 }
 
+// Renvoie true si un mois est bien sélectionné ; sinon affiche l'avertissement et bloque.
+function checkMoisSelected() {
+  var sel = document.getElementById('mois-month');
+  if (!sel.value) {
+    document.getElementById('mois-error').style.display = 'block';
+    sel.style.borderColor = '#EF4444';
+    sel.style.background = '#FEF2F2';
+    sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+  return true;
+}
+function clearMoisError() {
+  document.getElementById('mois-error').style.display = 'none';
+  var sel = document.getElementById('mois-month');
+  sel.style.borderColor = '#D1D5DB';
+  sel.style.background = '#fff';
+}
+
 function openModal(i) {
+  // Blocage : impossible d'ouvrir la saisie d'un salarié tant que le mois n'est pas choisi.
+  if (!checkMoisSelected()) return;
   currentIndex = i;
   currentFiles = [];
   var s = salaries[i];
@@ -416,10 +443,45 @@ function closeModal() {
   document.body.style.overflow = '';
   currentIndex = null;
   currentFiles = [];
+  submitting = false;
 }
 
+// Sécurité : un clic à côté de la fenêtre ne la ferme PLUS (évite les fermetures accidentelles).
+// La fermeture se fait uniquement via le bouton ✕ (avec confirmation si des données sont saisies).
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
+  // Ne rien faire sur un clic en dehors de la fenêtre.
+});
+
+// Renvoie true si l'utilisateur a commencé à saisir des données dans la fenêtre.
+function modalHasData() {
+  var ids = ['m-heures','m-heures-sup','m-absences','m-conges','m-prime','m-tickets','m-frais','m-commentaire',
+             'm-absence-debut','m-absence-fin','m-conge-debut','m-conge-fin','m-fin-contrat-date'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el && el.value && el.value.trim() !== '') return true;
+  }
+  if (document.getElementById('m-fin-contrat-check') && document.getElementById('m-fin-contrat-check').checked) return true;
+  if (currentFiles && currentFiles.length > 0) return true;
+  return false;
+}
+
+// Fermeture demandée via le bouton ✕ : on confirme si des données ont été saisies.
+function requestCloseModal() {
+  if (modalHasData()) {
+    var ok = confirm('Fermer sans envoyer ?\nЗакрыть без отправки? Введённые данные не сохранятся.');
+    if (!ok) return;
+  }
+  closeModal();
+}
+
+// Avertissement du navigateur si l'utilisateur quitte/ferme la page avec des données non envoyées.
+window.addEventListener('beforeunload', function(e) {
+  var modalVisible = document.getElementById('modal-overlay').classList.contains('visible');
+  if (submitting || (modalVisible && modalHasData())) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
 });
 
 function fileToBase64(file) {
@@ -473,6 +535,17 @@ async function submitEmployee() {
   var s = salaries[currentIndex];
   var moisM = document.getElementById('mois-month').value;
   var moisY = document.getElementById('mois-year').value;
+
+  // Sécurité : blocage si le mois n'a pas été choisi
+  if (!moisM) {
+    var meM = document.getElementById('modal-error');
+    meM.innerHTML = 'Veuillez choisir le mois concerné (en haut du formulaire).<br>Пожалуйста, выберите месяц вверху формы.';
+    meM.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
+    checkMoisSelected();
+    return;
+  }
   var mois = moisY + '-' + moisM;
 
   // Dates obligatoires si des jours sont saisis
@@ -508,6 +581,7 @@ async function submitEmployee() {
 
   var finContrat = document.getElementById('m-fin-contrat-check').checked ? (document.getElementById('m-fin-contrat-date').value || null) : null;
 
+  submitting = true;
   try {
     var sId = s.id;
     if (!sId) {
@@ -566,12 +640,14 @@ async function submitEmployee() {
       } catch(sortieErr) { console.error('Sortie update erreur:', sortieErr); }
     }
 
+    submitting = false;
     sentIndexes.push(currentIndex);
     closeModal();
     renderList();
 
     await refreshStatut(mois);
   } catch(e) {
+    submitting = false;
     btn.disabled = false;
     btn.innerHTML = '<span>📤</span> Envoyer pour ce salarié';
     document.getElementById('modal-error').textContent = 'Erreur : ' + e.message;
@@ -642,6 +718,7 @@ async function finaliserEnvoi() {
 }
 
 async function telechargerRecap() {
+  if (!checkMoisSelected()) return;
   var btn = document.getElementById('recap-btn');
   var oldHtml = btn.innerHTML;
   btn.disabled = true;
@@ -703,6 +780,7 @@ async function telechargerRecap() {
 }
 
 async function telechargerRecapPDF() {
+  if (!checkMoisSelected()) return;
   var btn = document.getElementById('recap-pdf-btn');
   var oldHtml = btn.innerHTML;
   btn.disabled = true;
