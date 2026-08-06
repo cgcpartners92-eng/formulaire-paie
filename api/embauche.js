@@ -20,10 +20,23 @@ const DOSSIERS = [
 const RACINE = "/2 PAIE";
 const SOUS_DOSSIER = "Nouveaux salariés";
 
-function resoudreDossier(societe) {
+// Résout le nom de dossier (Dropbox) pour une société.
+// 1) On regarde d'abord la liste connue (préserve les noms de dossiers existants).
+// 2) Sinon, on accepte automatiquement toute société qui existe déjà dans Airtable.
+//    => Plus besoin de modifier le code quand on ajoute une nouvelle société.
+async function resoudreDossier(societe) {
   if (!societe) return null;
-  const cible = String(societe).trim().toLowerCase();
-  return DOSSIERS.find(d => d.toLowerCase() === cible) || null;
+  const cible = normNom(societe);
+  const connu = DOSSIERS.find(d => normNom(d) === cible);
+  if (connu) return connu;
+  try {
+    const recs = await listerSocietes();
+    for (const rec of recs) {
+      const n = rec.fields && rec.fields["Nom Société"];
+      if (n && normNom(n) === cible) return String(n).trim();
+    }
+  } catch (_) {}
+  return null;
 }
 
 function nettoyer(s) {
@@ -192,13 +205,26 @@ function normNom(s) {
   return String(s || "").normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Récupère TOUTES les sociétés de la base Airtable (avec pagination, au-delà de 100).
+async function listerSocietes() {
+  const out = [];
+  let offset = "";
+  do {
+    const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Sociétés")
+      + "?pageSize=100" + (offset ? "&offset=" + encodeURIComponent(offset) : "");
+    const r = await fetch(url, { headers: { Authorization: "Bearer " + process.env.AIRTABLE_TOKEN } });
+    if (!r.ok) throw new Error("Airtable GET Sociétés " + r.status);
+    const j = await r.json();
+    for (const rec of (j.records || [])) out.push(rec);
+    offset = j.offset || "";
+  } while (offset);
+  return out;
+}
+
 async function trouverSocieteId(nom) {
   const cible = normNom(nom);
-  const url = "https://api.airtable.com/v0/" + AIRTABLE_BASE + "/" + encodeURIComponent("Sociétés") + "?pageSize=100";
-  const r = await fetch(url, { headers: { Authorization: "Bearer " + process.env.AIRTABLE_TOKEN } });
-  if (!r.ok) throw new Error("Airtable GET Sociétés " + r.status);
-  const j = await r.json();
-  for (const rec of (j.records || [])) {
+  const recs = await listerSocietes();
+  for (const rec of recs) {
     const n = rec.fields && rec.fields["Nom Société"];
     if (n && normNom(n) === cible) return rec.id;
   }
@@ -283,7 +309,7 @@ export default async function handler(req, res) {
       res.status(400).json({ ok: false, error: "Corps de requête invalide" }); return;
     }
 
-    const dossier = resoudreDossier(body.societe);
+    const dossier = await resoudreDossier(body.societe);
     if (!dossier) { res.status(400).json({ ok: false, error: "Société inconnue : " + (body.societe || "") }); return; }
 
     const token = await obtenirToken();
