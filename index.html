@@ -593,40 +593,57 @@ async function submitEmployee() {
       sId = nd.id;
       salaries[currentIndex].id = sId;
     }
-    await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles', {
-      method: 'POST', headers: H,
-      body: JSON.stringify({ fields: {
-        'Mois': mois,
-        'Société': [socId],
-        'Nom société': societe,
-        'Nom du salarié': s.nom,
-        'Heures travaillées': parseFloat(document.getElementById('m-heures').value) || 0,
-        'Heures supplémentaires': parseFloat(document.getElementById('m-heures-sup').value) || 0,
-        'Absences (jours)': parseFloat(document.getElementById('m-absences').value) || 0,
-        'Dates absences': formatAbsenceDates(),
-        'Congés (jours)': parseFloat(document.getElementById('m-conges').value) || 0,
-        'Dates congés': formatCongeDates(),
-        'Prime (€)': parseFloat(document.getElementById('m-prime').value) || 0,
-        'Tickets restaurant': parseInt(document.getElementById('m-tickets').value) || 0,
-        'Notes de frais (€)': parseFloat(document.getElementById('m-frais').value) || 0,
-        'Commentaire': document.getElementById('m-commentaire').value || '',
-        'Fin de contrat': finContrat,
-        'Pièce jointe': []
-      }})
-    });
+    // Champs à enregistrer pour ce salarié / ce mois
+    var vmFields = {
+      'Mois': mois,
+      'Société': [socId],
+      'Nom société': societe,
+      'Nom du salarié': s.nom,
+      'Heures travaillées': parseFloat(document.getElementById('m-heures').value) || 0,
+      'Heures supplémentaires': parseFloat(document.getElementById('m-heures-sup').value) || 0,
+      'Absences (jours)': parseFloat(document.getElementById('m-absences').value) || 0,
+      'Dates absences': formatAbsenceDates(),
+      'Congés (jours)': parseFloat(document.getElementById('m-conges').value) || 0,
+      'Dates congés': formatCongeDates(),
+      'Prime (€)': parseFloat(document.getElementById('m-prime').value) || 0,
+      'Tickets restaurant': parseInt(document.getElementById('m-tickets').value) || 0,
+      'Notes de frais (€)': parseFloat(document.getElementById('m-frais').value) || 0,
+      'Commentaire': document.getElementById('m-commentaire').value || '',
+      'Fin de contrat': finContrat
+    };
 
-    // Upload files directly to Airtable after record creation
-    if (currentFiles.length > 0) {
-      var varResp2 = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + encodeURIComponent('AND({Nom du salarié}="' + s.nom + '",{Mois}="' + mois + '",{Nom société}="' + societe + '")') + '&sort[0][field]=Mois&sort[0][direction]=desc&maxRecords=1', { headers: H });
-      var varData2 = await varResp2.json();
-      if (varData2.records && varData2.records.length > 0) {
-        var newRecordId = varData2.records[0].id;
-        for (var fi = 0; fi < currentFiles.length; fi++) {
-          try {
-            await uploadAttachmentToAirtable(newRecordId, currentFiles[fi]);
-          } catch(uploadErr) {
-            console.error('Upload PJ erreur:', uploadErr);
-          }
+    // ANTI-DOUBLON : on cherche s'il existe déjà une ligne pour ce salarié / ce mois / cette société.
+    var nomEsc = String(s.nom).replace(/"/g, '\\"');
+    var socEsc = String(societe).replace(/"/g, '\\"');
+    var vmFiltre = encodeURIComponent('AND({Nom du salarié}="' + nomEsc + '",{Mois}="' + mois + '",{Nom société}="' + socEsc + '")');
+    var chkResp = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + vmFiltre + '&maxRecords=1', { headers: H });
+    var chkData = await chkResp.json();
+    var recordId = (chkData.records && chkData.records.length > 0) ? chkData.records[0].id : null;
+
+    if (recordId) {
+      // La ligne existe déjà → on MET À JOUR (les nouvelles valeurs remplacent les anciennes, pas de doublon)
+      await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles/' + recordId, {
+        method: 'PATCH', headers: H,
+        body: JSON.stringify({ fields: vmFields, typecast: true })
+      });
+    } else {
+      // Aucune ligne existante → on CRÉE une nouvelle ligne
+      vmFields['Pièce jointe'] = [];
+      var crResp = await fetch('https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles', {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ fields: vmFields, typecast: true })
+      });
+      var crData = await crResp.json();
+      recordId = crData.id;
+    }
+
+    // Upload des pièces jointes (ajoutées à la ligne, qu'elle soit nouvelle ou mise à jour)
+    if (currentFiles.length > 0 && recordId) {
+      for (var fi = 0; fi < currentFiles.length; fi++) {
+        try {
+          await uploadAttachmentToAirtable(recordId, currentFiles[fi]);
+        } catch(uploadErr) {
+          console.error('Upload PJ erreur:', uploadErr);
         }
       }
     }
