@@ -154,6 +154,13 @@
             <label><input type="radio" name="statut" value="Non-cadre"><span>Non-cadre<small>Не кадр</small></span></label>
           </div>
         </div>
+        <div class="field hidden" id="champCategorie">
+          <label class="lab">Catégorie <span class="ru">/ Категория</span></label>
+          <div class="seg">
+            <label><input type="radio" name="categorie" value="ETAM"><span>ETAM<small>Служащий</small></span></label>
+            <label><input type="radio" name="categorie" value="Ouvrier"><span>Ouvrier<small>Рабочий</small></span></label>
+          </div>
+        </div>
         <div class="field">
           <label class="lab" for="qualificationCCN">Qualification selon CCN <span class="ru">/ Квалификация по CCN</span></label>
           <input type="text" id="qualificationCCN" placeholder="Niveau / Position / Coefficient">
@@ -183,6 +190,10 @@
         <div class="field hidden" id="champChantier">
           <label class="lab" for="adresseChantier">Adresse du chantier <span class="ru">/ Адрес объекта</span></label>
           <input type="text" id="adresseChantier" placeholder="Lieu du chantier / Место работ">
+        </div>
+        <div class="field hidden" id="champEssai">
+          <label class="lab" for="periodeEssai">Période d'essai <span class="ru">/ Испытательный срок</span></label>
+          <input type="text" id="periodeEssai" placeholder="ex. 2 mois / напр. 2 месяца">
         </div>
       </div>
 
@@ -332,6 +343,16 @@ document.querySelectorAll('input[name=typeContrat]').forEach(r =>
     const v = (document.querySelector('input[name=typeContrat]:checked') || {}).value;
     document.getElementById("champFin").classList.toggle("hidden", v !== "CDD");
     document.getElementById("champChantier").classList.toggle("hidden", v !== "CDI de chantier");
+    document.getElementById("champEssai").classList.toggle("hidden", !v);
+  })
+);
+
+document.querySelectorAll('input[name=statut]').forEach(r =>
+  r.addEventListener("change", () => {
+    const v = (document.querySelector('input[name=statut]:checked') || {}).value;
+    const show = (v === "Non-cadre");
+    document.getElementById("champCategorie").classList.toggle("hidden", !show);
+    if (!show) { document.querySelectorAll('input[name=categorie]').forEach(c => { c.checked = false; }); }
   })
 );
 
@@ -345,8 +366,8 @@ form.addEventListener("submit", async (e) => {
   const employee = {
     civilite: val("civilite"), nom: val("nom"), prenom: val("prenom"), secu: val("secu"), naissance: fmt("naissance"),
     lieuNaissance: val("lieuNaissance"), nationalite: val("nationalite"), adresse: val("adresse"),
-    poste: val("poste"), statut: radio("statut"), qualificationCCN: val("qualificationCCN"), dateDebut: fmt("dateDebut"),
-    typeContrat: radio("typeContrat"), dateFin: fmt("dateFin"), adresseChantier: val("adresseChantier"), heures: val("heures"),
+    poste: val("poste"), statut: radio("statut"), categorie: radio("categorie"), qualificationCCN: val("qualificationCCN"), dateDebut: fmt("dateDebut"),
+    typeContrat: radio("typeContrat"), periodeEssai: val("periodeEssai"), dateFin: fmt("dateFin"), adresseChantier: val("adresseChantier"), heures: val("heures"),
     salaireHoraire: val("salaireHoraire"), salaireMensuel: val("salaireMensuel"),
     transport: val("transport"), sante: val("sante"),
     commentaires: val("commentaires"), responsable: val("responsable")
