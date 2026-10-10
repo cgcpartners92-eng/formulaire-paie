@@ -164,10 +164,11 @@ function ficheHtml(e, societe) {
     ]) +
     bloc("02", "Poste et contrat", "Должность и контракт", [
       ligne("Poste", "Должность", e.poste),
-      ligne("Statut", "Статус", e.statut),
+      ligne("Statut", "Статус", (e.statut || "") + (e.categorie ? " — " + e.categorie : "")),
       ligne("Qualification selon CCN", "Квалификация по CCN", e.qualificationCCN),
       ligne("Début du contrat", "Начало контракта", e.dateDebut),
       ligne("Type de contrat", "Тип контракта", e.typeContrat),
+      ligne("Période d'essai", "Испытательный срок", e.periodeEssai),
       ligne("Fin (si CDD)", "Окончание (срочный)", e.dateFin),
       ligne("Adresse du chantier", "Адрес объекта", e.adresseChantier),
       ligne("Heures / semaine", "Часов в неделю", e.heures)
@@ -276,7 +277,13 @@ async function creerSalarie(e, societe) {
   if (contrat) fields["fldKdEis3uqZhxrIA"] = [contrat];           // Type de contrat
   const qualif = mapQualif(e.statut);
   if (qualif) fields["fld7632DZubjDnDlW"] = [qualif];             // Qualification
-  const comm = [e.qualificationCCN, e.adresseChantier ? "Chantier : " + e.adresseChantier : "", e.commentaires].filter(Boolean).join("\n");
+  const comm = [
+    e.qualificationCCN,
+    e.categorie ? "Catégorie : " + e.categorie : "",
+    e.periodeEssai ? "Période d'essai : " + e.periodeEssai : "",
+    e.adresseChantier ? "Chantier : " + e.adresseChantier : "",
+    e.commentaires
+  ].filter(Boolean).join("\n");
   if (comm) fields["fldDlK3Qmx6czbTTo"] = comm;                   // Commentaire
   try {
     const sid = await trouverSocieteId(societe);
