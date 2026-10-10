@@ -35,8 +35,8 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
 /* EMPLOYEE LIST */
 .employee-card { display: flex; align-items: center; padding: 14px 16px; background: #F8FAFF; border: 1.5px solid #DBEAFE; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.15s; }
 .employee-card:hover { border-color: #2563EB; background: #EFF6FF; transform: translateX(2px); }
-.employee-card.sent { background: #F9FAFB; border-color: #E5E7EB; cursor: default; opacity: 0.6; }
-.employee-card.sent:hover { transform: none; }
+.employee-card.sent { background: #F0FDF4; border-color: #BBF7D0; cursor: pointer; }
+.employee-card.sent:hover { border-color: #16A34A; background: #DCFCE7; transform: translateX(2px); }
 .employee-info { flex: 1; }
 .employee-name { font-size: 15px; font-weight: 600; color: #111827; }
 .employee-poste { font-size: 12px; color: #6B7A8D; margin-top: 2px; }
@@ -114,7 +114,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
       <div class="form-group" style="margin-bottom:0">
         <label>Mois concerné <span style="color:#EF4444">*</span></label>
         <div style="display:flex;gap:8px">
-          <select id="mois-month" onchange="clearMoisError()" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
+          <select id="mois-month" onchange="onMoisChange()" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
             <option value="" selected>— Choisir / Выбрать —</option>
             <option value="01">Janvier</option><option value="02">Février</option>
             <option value="03">Mars</option><option value="04">Avril</option>
@@ -123,7 +123,7 @@ input[readonly] { background: #F9FAFB; color: #6B7A8D; cursor: not-allowed; bord
             <option value="09">Septembre</option><option value="10">Octobre</option>
             <option value="11">Novembre</option><option value="12">Décembre</option>
           </select>
-          <select id="mois-year" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
+          <select id="mois-year" onchange="onMoisChange()" style="flex:1;padding:10px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;background:#fff;color:#111827">
             <option value="2025">2025</option><option value="2026">2026</option>
             <option value="2027">2027</option><option value="2028">2028</option>
           </select>
@@ -257,6 +257,7 @@ var params = new URLSearchParams(window.location.search);
 var societe = params.get('societe') || '';
 var salaries = [];
 var sentIndexes = [];
+var submittedNames = {}; // noms des salariés déjà envoyés pour le mois sélectionné (lus dans Airtable)
 var socId = null;
 var currentIndex = null;
 var currentFiles = [];
@@ -316,20 +317,23 @@ async function init() {
 function renderList() {
   var list = document.getElementById('salaries-list');
   var total = salaries.length;
-  var sent = sentIndexes.length;
+  var sent = 0;
+  salaries.forEach(function(s, i) {
+    if (sentIndexes.indexOf(i) > -1 || submittedNames[s.nom]) sent++;
+  });
   document.getElementById('progress-text').textContent = sent + ' / ' + total + ' soumis';
   document.getElementById('progress-fill').style.width = total > 0 ? (sent / total * 100) + '%' : '0%';
 
   var html = '';
   salaries.forEach(function(s, i) {
-    var isSent = sentIndexes.indexOf(i) > -1;
+    var isSent = sentIndexes.indexOf(i) > -1 || submittedNames[s.nom];
     if (isSent) {
-      html += '<div class="employee-card sent">' +
+      html += '<div class="employee-card sent" onclick="openModal(' + i + ')">' +
         '<div class="employee-info">' +
         '<div class="employee-name">' + s.nom + '</div>' +
         (s.poste ? '<div class="employee-poste">' + s.poste + '</div>' : '') +
         '</div>' +
-        '<span class="employee-sent-badge">✅ Envoyé</span>' +
+        '<span class="employee-sent-badge">✅ Déjà envoyé · modifier ›</span>' +
         '</div>';
     } else {
       html += '<div class="employee-card" onclick="openModal(' + i + ')">' +
@@ -345,6 +349,41 @@ function renderList() {
 
   var allSent = sent === total && total > 0;
   document.getElementById('done-btn').style.display = allSent ? 'flex' : 'none';
+}
+
+// Lit dans Airtable quels salariés ont déjà été envoyés pour le mois choisi,
+// afin de les marquer « Déjà envoyé » quand le client rouvre le formulaire.
+async function loadSubmittedForMonth() {
+  submittedNames = {};
+  sentIndexes = []; // on repart de l'état réel du mois choisi (source = Airtable)
+  var moisM = document.getElementById('mois-month').value;
+  var moisY = document.getElementById('mois-year').value;
+  if (!moisM || !moisY) { renderList(); return; }
+  var mois = moisY + '-' + moisM;
+  try {
+    var socEsc = String(societe).replace(/"/g, '\\"');
+    var filtre = encodeURIComponent('AND({Nom société}="' + socEsc + '",{Mois}="' + mois + '")');
+    var all = [];
+    var offset = null;
+    do {
+      var url = 'https://api.airtable.com/v0/' + BASE + '/Variables%20mensuelles?filterByFormula=' + filtre + (offset ? '&offset=' + offset : '');
+      var r = await fetch(url, { headers: H });
+      var d = await r.json();
+      all = all.concat(d.records || []);
+      offset = d.offset || null;
+    } while (offset);
+    all.forEach(function(rec) {
+      var nm = rec.fields && rec.fields['Nom du salarié'];
+      if (nm) submittedNames[nm] = true;
+    });
+  } catch(e) { console.error('loadSubmittedForMonth', e); }
+  renderList();
+}
+
+// Appelé quand le client change le mois ou l'année
+function onMoisChange() {
+  clearMoisError();
+  loadSubmittedForMonth();
 }
 
 function toggleCongeDates() {
@@ -659,6 +698,7 @@ async function submitEmployee() {
 
     submitting = false;
     sentIndexes.push(currentIndex);
+    if (s && s.nom) submittedNames[s.nom] = true;
     closeModal();
     renderList();
 
