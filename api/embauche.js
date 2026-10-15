@@ -97,7 +97,9 @@ async function notifier(e, societe) {
     "Société : " + societe + "\n" +
     "Nom : " + (((e.civilite? e.civilite+" ":"") + (e.nom||"") + " " + (e.prenom||"")).trim() || "—") + "\n" +
     "Poste : " + (e.poste || "—") + "\n" +
-    "Contrat : " + (e.typeContrat || "—");
+    "Contrat : " + (e.typeContrat || "—") + "\n" +
+    "Date d'embauche : " + (e.dateDebut || "—") + "\n" +
+    "Commentaire : " + (String(e.commentaires || "").trim().slice(0, 1500) || "—");
   try {
     await fetch(`https://api.telegram.org/bot${t}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
